@@ -19,7 +19,7 @@ export const CONSULTAR_DISPONIBILIDAD = gql`
       fechaInicio: $fechaInicio
       fechaFin: $fechaFin
     ) {
-      id # <--- Clave para el map() y la caché de Apollo
+      id
       marca
       modelo
       anio
@@ -74,7 +74,7 @@ export const HISTORIAL_ALQUILERES = gql`
   query historialAlquileres($documento: Int!) {
     historialAlquileres(documento: $documento) {
       id
-      fechaInicio # <--- Corregido el typo (tenía fechInicio)
+      fechaInicio
       fechaFin
       cantDias
       importeTotal
