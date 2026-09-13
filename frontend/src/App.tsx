@@ -6,6 +6,7 @@ import Reservar from "./components/reservar/Reservar";
 import Cliente from "./components/cliente/Cliente";
 import HistorialAlquileres from "./components/historial-alquileres/HistorialAlquileres";
 import MisReservas from "./components/mis-reservas/MisReservas";
+import ConsultarDisponibilidad from "./components/consultar-disponibilidad/ConsultarDisponibilidad";
 
 function App() {
   return (
@@ -18,7 +19,11 @@ function App() {
         <Route path="/reservar" element={<Reservar />} />
         <Route path="/clientes" element={<Cliente />} />
         <Route path="/historial-alquileres" element={<HistorialAlquileres />} />
-        <Route path="/mis-reservas" element={<MisReservas />} />
+        <Route path="/reservas" element={<MisReservas />} />
+        <Route
+          path="/consultar-disponibilidad"
+          element={<ConsultarDisponibilidad />}
+        />
         <Route path="/" element={<MainLayout />} />
         <Route path="*" element={<h4>404</h4>} />
       </Routes>

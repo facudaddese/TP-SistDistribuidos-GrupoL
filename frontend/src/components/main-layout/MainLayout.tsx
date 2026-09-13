@@ -2,7 +2,7 @@ import ListaVehiculos from "../lista-vehiculos/ListaVehiculos";
 
 const MainLayout = () => {
   return (
-    <main className="p-10">
+    <main className="mx-10">
       <ListaVehiculos />
     </main>
   );
