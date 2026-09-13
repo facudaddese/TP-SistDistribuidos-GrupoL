@@ -2,7 +2,7 @@ import { gql } from "@apollo/client";
 
 export const CONSULTAR_DISPONIBILIDAD = gql`
   query consultarDisponibilidad(
-    $tipo: String
+    $tipo: TipoVehiculo
     $marca: String
     $modelo: String
     $precioMin: Int
@@ -26,7 +26,7 @@ export const CONSULTAR_DISPONIBILIDAD = gql`
       patente
       color
       tipo
-      precio
+      precioDiario
     }
   }
 `;

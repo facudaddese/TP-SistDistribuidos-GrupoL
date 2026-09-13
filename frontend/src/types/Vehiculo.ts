@@ -14,3 +14,18 @@ export interface Vehiculo {
   estadoVehiculo: EstadoVehiculo;
   activo: boolean;
 }
+
+export interface Disponibilidad {
+  id: string;
+  marca: string;
+  modelo: string;
+  anio: number;
+  patente: string;
+  color: string;
+  tipo: Tipo;
+  precioDiario: number;
+}
+
+export interface ConsultarDisponibilidadData {
+  consultarDisponibilidad: Disponibilidad[];
+}
