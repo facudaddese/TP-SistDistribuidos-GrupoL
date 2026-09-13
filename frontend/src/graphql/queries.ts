@@ -5,12 +5,12 @@ export const CONSULTAR_DISPONIBILIDAD = gql`
     $tipo: String
     $marca: String
     $modelo: String
-    $precioMin: Float
-    $precioMax: Float
+    $precioMin: Int
+    $precioMax: Int
     $fechaInicio: String!
     $fechaFin: String!
   ) {
-    vehiculosDisponibles(
+    consultarDisponibilidad(
       tipo: $tipo
       marca: $marca
       modelo: $modelo
@@ -19,12 +19,14 @@ export const CONSULTAR_DISPONIBILIDAD = gql`
       fechaInicio: $fechaInicio
       fechaFin: $fechaFin
     ) {
-      id
+      id # <--- Clave para el map() y la caché de Apollo
       marca
       modelo
       anio
+      patente
+      color
       tipo
-      precioDiario
+      precio
     }
   }
 `;
@@ -46,6 +48,12 @@ export const CONSULTAR_RESERVAS = gql`
       fechaInicio: $fechaInicio
       fechaFin: $fechaFin
     ) {
+      id
+      fechaInicio
+      fechaFin
+      precioDiario
+      importeTotal
+      estado
       cliente {
         nombre
         apellido
@@ -58,12 +66,6 @@ export const CONSULTAR_RESERVAS = gql`
         patente
         tipo
       }
-      id
-      fechaInicio
-      fechaFin
-      precioDiario
-      importeTotal
-      estado
     }
   }
 `;
@@ -71,6 +73,12 @@ export const CONSULTAR_RESERVAS = gql`
 export const HISTORIAL_ALQUILERES = gql`
   query historialAlquileres($documento: Int!) {
     historialAlquileres(documento: $documento) {
+      id
+      fechaInicio # <--- Corregido el typo (tenía fechInicio)
+      fechaFin
+      cantDias
+      importeTotal
+      estado
       vehiculo {
         marca
         modelo
@@ -78,12 +86,6 @@ export const HISTORIAL_ALQUILERES = gql`
         patente
         tipo
       }
-        id
-      fechInicio
-      fechaFin
-      cantDias
-      importeTotal
-      estado
     }
   }
 `;
