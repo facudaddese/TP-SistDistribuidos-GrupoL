@@ -35,8 +35,8 @@ const NavBar = () => {
           </Link>
         </li>
         <li className={`${styleLi}`}>
-          <Link to="/reservar" className={`${styleLink}`}>
-            Reservar
+          <Link to="/mis-reservas" className={`${styleLink}`}>
+            Mis reserva
           </Link>
         </li>
         <li className={`${styleLi}`}>
