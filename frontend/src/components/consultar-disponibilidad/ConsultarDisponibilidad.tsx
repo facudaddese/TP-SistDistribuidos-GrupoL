@@ -18,15 +18,18 @@ const inputStyles = {
   "& .MuiOutlinedInput-root, & .MuiPickersOutlinedInput-root": {
     color: "#f3f4f6",
     "& fieldset, & .MuiPickersOutlinedInput-notchedOutline": {
-      borderColor: "#f3f4f6",
+      borderColor: "#3b82f6",
     },
     "&:hover fieldset, &:hover .MuiPickersOutlinedInput-notchedOutline": {
       borderColor: "#f3f4f6",
     },
     "&.Mui-focused fieldset, &.Mui-focused .MuiPickersOutlinedInput-notchedOutline":
       {
-        borderColor: "#3b82f6",
+        borderColor: "#f3f4f6",
       },
+    "& .MuiSvgIcon-root": {
+      color: "#f3f4f6",
+    },
   },
 };
 
