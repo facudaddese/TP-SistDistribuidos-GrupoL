@@ -10,7 +10,9 @@
  - Facundo D'Addese ([facudaddese](https://github.com/facudaddese))
 
 ## Tareas realizadas por integrante
-**Facundo D'Addese**
-	- Consulta de disponibilidad (GRAPHQL)
-	- Consulta de reservas (GRAPHQL)
-	- Historial de alquileres (GRAPHQL) 
+
+#### Facundo D'Addese
+
+- Consulta de disponibilidad (GRAPHQL)
+- Consulta de reservas (GRAPHQL)
+- Historial de alquileres (GRAPHQL) 
