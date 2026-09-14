@@ -8,6 +8,8 @@
  - Alejo Brites ([AlejoBrites](https://github.com/AlejoBrites))
  - Dante Gissara ([dantegissara](https://github.com/dantegissara))
  - Facundo D'Addese ([facudaddese](https://github.com/facudaddese))
+ - Lucas Cardozo ([LucaasCardozo](https://github.com/LucaasCardozo))
+
 
 ## Tareas realizadas por integrante
 
