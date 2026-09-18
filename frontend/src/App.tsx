@@ -24,6 +24,7 @@ function App() {
           path="/consultar-disponibilidad"
           element={<ConsultarDisponibilidad />}
         />
+        {/* <Route path="/admin/vehiculos" element={<AdminVehiculos />} /> */}
         <Route path="/" element={<MainLayout />} />
         <Route path="*" element={<h4>404</h4>} />
       </Routes>
