@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useRol } from "../../context/RolContext";
 
 const styleLink = "cursor-pointer hover:border-b";
@@ -8,7 +8,12 @@ const styleLi =
 const NavBar = () => {
 
   const { rol, setRol } = useRol();
+  const navigate = useNavigate()
 
+  const handleRolChange = (nuevoRol: typeof rol) => {
+    setRol(nuevoRol)
+    navigate("/")
+  }
 
   return (
     <nav className="grid items-center py-5 px-10 grid-cols-1 grid-rows-2 lg:grid-cols-3 lg:grid-rows-1">
@@ -55,7 +60,7 @@ const NavBar = () => {
         <li>
           <select 
             value={rol}
-            onChange={(e) => setRol(e.target.value as typeof rol)}
+            onChange={(e) => handleRolChange(e.target.value as typeof rol)}
             className="bg-gray-800 text-white text-[12px] rounded px-2 py-1"
           >
             <option value="CLIENTE">Ver como Cliente</option>
