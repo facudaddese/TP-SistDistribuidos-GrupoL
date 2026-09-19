@@ -17,10 +17,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> manejarRecursoNoEncontrado(
             RecursoNoEncontradoException exception
     ) {
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.NOT_FOUND.value(),
-                HttpStatus.NOT_FOUND.getReasonPhrase(),
+        ApiError error = crearError(
+                HttpStatus.NOT_FOUND,
                 exception.getMessage(),
                 Map.of()
         );
@@ -28,14 +26,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiError> manejarResourceNotFound(
+            ResourceNotFoundException exception
+    ) {
+        ApiError error = crearError(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiError> manejarBadRequest(
+            BadRequestException exception
+    ) {
+        ApiError error = crearError(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage(),
+                Map.of()
+        );
+
+        return ResponseEntity.badRequest().body(error);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> manejarArgumentoInvalido(
             IllegalArgumentException exception
     ) {
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.CONFLICT.value(),
-                HttpStatus.CONFLICT.getReasonPhrase(),
+        ApiError error = crearError(
+                HttpStatus.CONFLICT,
                 exception.getMessage(),
                 Map.of()
         );
@@ -55,14 +77,26 @@ public class GlobalExceptionHandler {
                         errores.put(error.getField(), error.getDefaultMessage())
                 );
 
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+        ApiError error = crearError(
+                HttpStatus.BAD_REQUEST,
                 "Los datos enviados no son válidos",
                 errores
         );
 
         return ResponseEntity.badRequest().body(error);
+    }
+
+    private ApiError crearError(
+            HttpStatus status,
+            String mensaje,
+            Map<String, String> erroresValidacion
+    ) {
+        return new ApiError(
+                LocalDateTime.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                mensaje,
+                erroresValidacion
+        );
     }
 }
