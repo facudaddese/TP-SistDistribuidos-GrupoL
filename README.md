@@ -18,3 +18,10 @@
 - Consulta de disponibilidad (GRAPHQL)
 - Consulta de reservas (GRAPHQL)
 - Historial de alquileres (GRAPHQL) 
+
+#### Marco Carreira
+
+- Gestión de vehículos (REST)
+- Gestión de clientes (REST)
+- Alta de reserva (REST)
+- Cancelación de reserva (REST)
