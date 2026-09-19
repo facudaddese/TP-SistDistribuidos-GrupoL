@@ -39,11 +39,18 @@ const NavBar = () => {
         )}
 
         {rol === 'CLIENTE' && (
-          <li className={`${styleLi}`}>
+          <>
+            <li className={`${styleLi}`}>
             <Link to="/reservar" className={`${styleLink}`}>
               Reservar
             </Link>
           </li>
+          <li className={`${styleLi}`}>
+            <Link to="/historial-alquileres" className={`${styleLink}`}>
+              Historial de alquileres
+            </Link>
+          </li>
+          </>
         )}
 
         <li className={`${styleLi}`}>
@@ -51,11 +58,7 @@ const NavBar = () => {
             Reservas
           </Link>
         </li>
-        <li className={`${styleLi}`}>
-          <Link to="/historial-alquileres" className={`${styleLink}`}>
-            Historial de alquileres
-          </Link>
-        </li>
+        
 
         <li>
           <select 
