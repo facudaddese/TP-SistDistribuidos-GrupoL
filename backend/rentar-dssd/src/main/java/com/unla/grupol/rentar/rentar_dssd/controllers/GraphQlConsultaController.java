@@ -6,7 +6,9 @@ import com.unla.grupol.rentar.rentar_dssd.services.GraphQlConsultaService;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.stereotype.Controller;
-
+import com.unla.grupol.rentar.rentar_dssd.dto.graphql.GraphQlReserva;
+import com.unla.grupol.rentar.rentar_dssd.entities.enums.EstadoReserva;
+import com.unla.grupol.rentar.rentar_dssd.dto.graphql.GraphQlAlquiler;
 import java.util.List;
 
 @Controller
@@ -39,5 +41,30 @@ public class GraphQlConsultaController {
                 fechaInicio,
                 fechaFin
         );
+
+    }
+    @QueryMapping
+    public List<GraphQlReserva> consultarReservas(
+            @Argument Long clienteId,
+            @Argument Long vehiculoId,
+            @Argument TipoVehiculo tipo,
+            @Argument EstadoReserva estado,
+            @Argument String fechaInicio,
+            @Argument String fechaFin
+    ) {
+        return consultaService.consultarReservas(
+                clienteId,
+                vehiculoId,
+                tipo,
+                estado,
+                fechaInicio,
+                fechaFin
+        );
+    }
+    @QueryMapping
+    public List<GraphQlAlquiler> historialAlquileres(
+            @Argument String documento
+    ) {
+        return consultaService.historialAlquileres(documento);
     }
 }
