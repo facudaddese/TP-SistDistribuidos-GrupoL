@@ -9,4 +9,6 @@ public interface ReservaService {
     ReservaResponseDTO crearReserva(ReservaRequestDTO request);
 
     List<ReservaResponseDTO> obtenerTodas();
+
+    ReservaResponseDTO cancelarReserva(Long id);
 }
