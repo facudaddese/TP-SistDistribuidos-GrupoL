@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -116,6 +117,32 @@ public class ReservaServiceImpl implements ReservaService {
                 .estado(reserva.getEstado())
                 .fechaCreacion(reserva.getFechaCreacion())
                 .build()).toList();
+    }
+
+    @Override
+    @Transactional
+    public ReservaResponseDTO cancelarReserva(Long id) {
+        Reserva reserva = reservaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada con ID: " + id));
+
+        if (!LocalDateTime.now().isBefore(reserva.getFechaHoraInicio())) {
+            throw new BadRequestException("No se puede cancelar una reserva cuyo período de alquiler ya ha comenzado");
+        }
+
+        reserva.setEstado(EstadoReserva.CANCELADA);
+        Reserva reservaGuardada = reservaRepository.save(reserva);
+
+        return ReservaResponseDTO.builder()
+                .id(reservaGuardada.getId())
+                .clienteId(reservaGuardada.getCliente().getId())
+                .vehiculoId(reservaGuardada.getVehiculo().getId())
+                .fechaHoraInicio(reservaGuardada.getFechaHoraInicio())
+                .fechaHoraFin(reservaGuardada.getFechaHoraFin())
+                .precioDiarioAplicado(reservaGuardada.getPrecioDiarioAplicado())
+                .importeTotal(reservaGuardada.getImporteTotal())
+                .estado(reservaGuardada.getEstado())
+                .fechaCreacion(reservaGuardada.getFechaCreacion())
+                .build();
     }
 
 }
