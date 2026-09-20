@@ -7,7 +7,7 @@ import type { Dayjs } from "dayjs";
 import type { ConsultarReservasData, Tipo } from "../../types/Vehiculo";
 import { CONSULTAR_RESERVAS } from "../../graphql/queries";
 
-const estados = ["RESERVADO", "CANCELADA"];
+const estados = ["CONFIRMADA", "CANCELADA", "FINALIZADA"];
 const tipos: Tipo[] = ["SEDAN", "SUV", "PICKUP", "COUPE", "HATCHBACK"];
 
 const isAdmin = false; // Revisar

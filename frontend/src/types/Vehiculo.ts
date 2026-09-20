@@ -61,7 +61,7 @@ export interface HistorialAlquileresData {
 export interface ClienteReserva {
   nombre: string;
   apellido: string;
-  documento: number;
+  documento: string;
 }
 
 export interface VehiculoReserva {
