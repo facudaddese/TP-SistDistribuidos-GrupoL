@@ -25,3 +25,9 @@
 - Gestión de clientes (REST)
 - Alta de reserva (REST)
 - Cancelación de reserva (REST)
+
+#### Marco Carreira
+
+- ABM vehículos (Backend)
+- Alta de reserva (Backend)
+- Cancelación de reserva (Backend)
