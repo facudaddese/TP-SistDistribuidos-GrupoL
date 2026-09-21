@@ -19,7 +19,7 @@
 - Consulta de reservas (GRAPHQL)
 - Historial de alquileres (GRAPHQL) 
 
-#### Marco Carreira
+#### Alejo Brites
 
 - Gestión de vehículos (REST)
 - Gestión de clientes (REST)
