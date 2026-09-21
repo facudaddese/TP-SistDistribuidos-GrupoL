@@ -1,0 +1,13 @@
+# Local environment variables
+.env
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Visual Studio Code
+.vscode/
+
+# Operating system
+.DS_Store
+Thumbs.db
