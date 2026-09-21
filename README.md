@@ -19,14 +19,14 @@
 - Consulta de reservas (GRAPHQL)
 - Historial de alquileres (GRAPHQL) 
 
-#### Alejo Brites
+#### Marco Carreira
 
 - Gestión de vehículos (REST)
 - Gestión de clientes (REST)
 - Alta de reserva (REST)
 - Cancelación de reserva (REST)
 
-#### Marco Carreira
+#### Alejo Brites
 
 - ABM vehículos (Backend)
 - Alta de reserva (Backend)
