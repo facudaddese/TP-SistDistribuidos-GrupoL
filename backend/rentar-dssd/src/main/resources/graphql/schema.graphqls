@@ -1,0 +1,84 @@
+type Query {
+    consultarDisponibilidad(
+        tipo: TipoVehiculo
+        marca: String
+        modelo: String
+        precioMin: Int
+        precioMax: Int
+        fechaInicio: String!
+        fechaFin: String!
+    ): [VehiculoDisponible!]!
+
+    consultarReservas(
+        clienteId: ID
+        vehiculoId: ID
+        tipo: TipoVehiculo
+        estado: EstadoReserva
+        fechaInicio: String
+        fechaFin: String
+    ): [ReservaConsulta!]!
+
+    historialAlquileres(
+        documento: String!
+    ): [AlquilerHistorial!]!
+}
+
+type VehiculoDisponible {
+    id: ID!
+    marca: String!
+    modelo: String!
+    anio: Int!
+    patente: String!
+    color: String
+    tipo: TipoVehiculo!
+    precioDiario: Float!
+}
+
+type ReservaConsulta {
+    id: ID!
+    fechaInicio: String!
+    fechaFin: String!
+    precioDiario: Float!
+    importeTotal: Float!
+    estado: EstadoReserva!
+    cliente: ClienteReserva!
+    vehiculo: VehiculoReserva!
+}
+
+type AlquilerHistorial {
+    id: ID!
+    fechaInicio: String!
+    fechaFin: String!
+    cantDias: Int!
+    importeTotal: Float!
+    estado: EstadoReserva!
+    vehiculo: VehiculoReserva!
+}
+
+type ClienteReserva {
+    nombre: String!
+    apellido: String!
+    documento: String!
+}
+
+type VehiculoReserva {
+    marca: String!
+    modelo: String!
+    anio: Int!
+    patente: String!
+    tipo: TipoVehiculo!
+}
+
+enum TipoVehiculo {
+    SEDAN
+    SUV
+    PICKUP
+    COUPE
+    HATCHBACK
+}
+
+enum EstadoReserva {
+    CONFIRMADA
+    CANCELADA
+    FINALIZADA
+}

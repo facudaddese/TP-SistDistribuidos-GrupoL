@@ -35,8 +35,8 @@ export const CONSULTAR_RESERVAS = gql`
   query consultarReservas(
     $clienteId: ID
     $vehiculoId: ID
-    $tipo: String
-    $estado: String
+    $tipo: TipoVehiculo
+    $estado: EstadoReserva
     $fechaInicio: String
     $fechaFin: String
   ) {
@@ -71,7 +71,7 @@ export const CONSULTAR_RESERVAS = gql`
 `;
 
 export const HISTORIAL_ALQUILERES = gql`
-  query historialAlquileres($documento: Int!) {
+  query historialAlquileres($documento: String!) {
     historialAlquileres(documento: $documento) {
       id
       fechaInicio
@@ -86,6 +86,21 @@ export const HISTORIAL_ALQUILERES = gql`
         patente
         tipo
       }
+    }
+  }
+`;
+
+export const OBTENER_TODOS_LOS_VEHICULOS = gql`
+  query obtenerTodosLosVehiculos {
+    obtenerTodosLosVehiculos {
+      id
+      marca
+      modelo
+      anio
+      tipo
+      precioDiario
+      patente
+      color
     }
   }
 `;

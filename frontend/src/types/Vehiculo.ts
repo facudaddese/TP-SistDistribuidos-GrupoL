@@ -61,7 +61,7 @@ export interface HistorialAlquileresData {
 export interface ClienteReserva {
   nombre: string;
   apellido: string;
-  documento: number;
+  documento: string;
 }
 
 export interface VehiculoReserva {
@@ -86,3 +86,32 @@ export interface Reserva {
 export interface ConsultarReservasData {
   consultarReservas: Reserva[];
 }
+
+export interface VehiculoRequest {
+  patente: string;
+  marca: string;
+  modelo: string;
+  anio: number;
+  color: string;
+  tipoVehiculo: Tipo;
+  precioDiario: number;
+}
+
+// Para el update no se manda patente: es inmutable, el server la ignora
+// si llega, pero mejor ni tentarlo.
+export type VehiculoUpdateRequest = Omit<VehiculoRequest, "patente">;
+
+export interface VehiculoResponse {
+  id: number;
+  patente: string;
+  marca: string;
+  modelo: string;
+  anio: number;
+  color: string;
+  tipoVehiculo: Tipo;
+  precioDiario: number;
+  estado: EstadoVehiculo;
+  activo: boolean;
+}
+
+

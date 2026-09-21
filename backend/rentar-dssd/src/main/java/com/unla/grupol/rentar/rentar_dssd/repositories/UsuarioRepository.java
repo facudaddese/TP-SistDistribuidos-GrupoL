@@ -1,5 +1,13 @@
 package com.unla.grupol.rentar.rentar_dssd.repositories;
 
-public class UsuarioRepository {
+import com.unla.grupol.rentar.rentar_dssd.entities.Usuario;
+import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
+public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
+
+    Optional<Usuario> findByEmail(String email);
+
+    boolean existsByEmail(String email);
 }
