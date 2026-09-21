@@ -1,6 +1,7 @@
 package com.unla.grupol.rentar.rentar_dssd.services.impl;
 
 import com.unla.grupol.rentar.rentar_dssd.dtos.request.VehiculoRequestDTO;
+import com.unla.grupol.rentar.rentar_dssd.dtos.request.VehiculoUpdateRequestDTO;
 import com.unla.grupol.rentar.rentar_dssd.dtos.response.VehiculoResponseDTO;
 import com.unla.grupol.rentar.rentar_dssd.entities.Vehiculo;
 import com.unla.grupol.rentar.rentar_dssd.entities.enums.EstadoVehiculo;
@@ -46,7 +47,7 @@ public class VehiculoServiceImpl implements VehiculoService {
 
     @Override
     @Transactional
-    public VehiculoResponseDTO updateVehiculo(Long id, VehiculoRequestDTO request) {
+    public VehiculoResponseDTO updateVehiculo(Long id, VehiculoUpdateRequestDTO request) {
         Vehiculo vehiculo = vehiculoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehiculo no encontrado con ID: " + id));
 
