@@ -17,7 +17,8 @@
 
 - Consulta de disponibilidad (GRAPHQL)
 - Consulta de reservas (GRAPHQL)
-- Historial de alquileres (GRAPHQL) 
+- Historial de alquileres (GRAPHQL)
+- Obtener todos los vehiculos (GRAPHQL)
 
 #### Marco Carreira
 
