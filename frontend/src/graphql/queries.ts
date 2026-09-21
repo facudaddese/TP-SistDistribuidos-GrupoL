@@ -89,3 +89,18 @@ export const HISTORIAL_ALQUILERES = gql`
     }
   }
 `;
+
+export const OBTENER_TODOS_LOS_VEHICULOS = gql`
+  query obtenerTodosLosVehiculos {
+    obtenerTodosLosVehiculos {
+      id
+      marca
+      modelo
+      anio
+      tipo
+      precioDiario
+      patente
+      color
+    }
+  }
+`;

@@ -26,6 +26,11 @@ import type {
   ClienteResponse,
 } from "../../types/Cliente";
 
+interface ApiResponseWrapper {
+  clientes?: ClienteResponse[];
+  content?: ClienteResponse[];
+}
+
 const emptyForm: ClienteRequest = {
   documento: "",
   nombre: "",
@@ -47,25 +52,47 @@ const Cliente = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const cargarClientes = async () => {
+  const cargarClientes = async (isMounted = true) => {
     setLoading(true);
     setError(null);
     try {
       const data = await clientesApi.listar();
-      setClientes(data);
+      const wrapper = data as ApiResponseWrapper;
+      const lista = Array.isArray(data)
+        ? data
+        : wrapper?.clientes || wrapper?.content || [];
+
+      if (isMounted) {
+        setClientes(lista);
+      }
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "No se pudo cargar el listado de clientes.",
-      );
+      if (isMounted) {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "No se pudo cargar el listado de clientes.",
+        );
+        setClientes([]);
+      }
     } finally {
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    cargarClientes();
+    let isMounted = true;
+
+    queueMicrotask(() => {
+      if (isMounted) {
+        cargarClientes(isMounted);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const abrirNuevo = () => {
@@ -92,7 +119,8 @@ const Cliente = () => {
 
   const cerrarDialog = () => setDialogOpen(false);
 
-  const validarEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const validarEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const guardar = async () => {
     setFormError(null);
@@ -129,7 +157,9 @@ const Cliente = () => {
       await cargarClientes();
     } catch (err) {
       setFormError(
-        err instanceof ApiError ? err.message : "No se pudo guardar el cliente.",
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo guardar el cliente.",
       );
     } finally {
       setSaving(false);
@@ -143,7 +173,9 @@ const Cliente = () => {
       await cargarClientes();
     } catch (err) {
       alert(
-        err instanceof ApiError ? err.message : "No se pudo dar de baja al cliente.",
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo dar de baja al cliente.",
       );
     }
   };
@@ -163,51 +195,73 @@ const Cliente = () => {
       {error && <p className="text-red-400 text-center py-4">{error}</p>}
 
       {!loading && !error && (
-        <TableContainer component={Paper} sx={{ bgcolor: "rgba(255,255,255,0.05)" }}>
+        <TableContainer
+          component={Paper}
+          sx={{ bgcolor: "rgba(255,255,255,0.05)" }}
+        >
           <Table>
             <TableHead>
               <TableRow>
-                {["Documento", "Nombre", "Apellido", "Email", "Teléfono", "Activo", ""].map(
-                  (h) => (
-                    <TableCell key={h} sx={{ color: "#f3f4f6", fontWeight: 600 }}>
-                      {h}
-                    </TableCell>
-                  ),
-                )}
+                {[
+                  "Documento",
+                  "Nombre",
+                  "Apellido",
+                  "Email",
+                  "Teléfono",
+                  "Activo",
+                  "",
+                ].map((h) => (
+                  <TableCell key={h} sx={{ color: "#f3f4f6", fontWeight: 600 }}>
+                    {h}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {clientes.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{c.documento}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{c.nombre}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{c.apellido}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{c.email}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{c.telefono}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={c.activo ? "Activo" : "Inactivo"}
-                      color={c.activo ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => abrirEdicion(c)}>
-                      <EditIcon sx={{ color: "#3b82f6" }} fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => darDeBaja(c)}
-                      disabled={!c.activo}
-                    >
-                      <DeleteIcon sx={{ color: "#f87171" }} fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {clientes.length === 0 && (
+              {Array.isArray(clientes) &&
+                clientes.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell sx={{ color: "#f3f4f6" }}>
+                      {c.documento}
+                    </TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{c.nombre}</TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>
+                      {c.apellido}
+                    </TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{c.email}</TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>
+                      {c.telefono}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={c.activo ? "Activo" : "Inactivo"}
+                        color={c.activo ? "success" : "default"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <IconButton size="small" onClick={() => abrirEdicion(c)}>
+                        <EditIcon sx={{ color: "#3b82f6" }} fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => darDeBaja(c)}
+                        disabled={!c.activo}
+                      >
+                        <DeleteIcon
+                          sx={{ color: "#f87171" }}
+                          fontSize="small"
+                        />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {(!Array.isArray(clientes) || clientes.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={7} sx={{ color: "#f3f4f6", textAlign: "center" }}>
+                  <TableCell
+                    colSpan={7}
+                    sx={{ color: "#f3f4f6", textAlign: "center" }}
+                  >
                     No hay clientes registrados.
                   </TableCell>
                 </TableRow>
@@ -217,11 +271,21 @@ const Cliente = () => {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={cerrarDialog} fullWidth maxWidth="sm" disableRestoreFocus>
+      <Dialog
+        open={dialogOpen}
+        onClose={cerrarDialog}
+        fullWidth
+        maxWidth="sm"
+        disableRestoreFocus
+      >
         <DialogTitle>
-          {editingId === null ? "Nuevo cliente" : `Editar cliente #${editingId}`}
+          {editingId === null
+            ? "Nuevo cliente"
+            : `Editar cliente #${editingId}`}
         </DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+        <DialogContent
+          sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
+        >
           <TextField
             label="Documento"
             value={form.documento}
@@ -261,7 +325,9 @@ const Cliente = () => {
             label="Fecha de nacimiento"
             type="date"
             value={form.fechaNacimiento}
-            onChange={(e) => setForm({ ...form, fechaNacimiento: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, fechaNacimiento: e.target.value })
+            }
             slotProps={{ inputLabel: { shrink: true } }}
           />
           {formError && <p className="text-red-500 text-sm">{formError}</p>}

@@ -52,24 +52,63 @@ const AdminVehiculos = () => {
   const [saving, setSaving] = useState(false);
 
   const cargarVehiculos = async () => {
-    setLoading(true);
     setError(null);
+    setLoading(true);
     try {
       const data = await vehiculosApi.listar();
-      setVehiculos(data);
+      const lista = Array.isArray(data)
+        ? data
+        : (data as any)?.vehiculos || (data as any)?.content || [];
+      setVehiculos(lista);
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
           : "No se pudo cargar el listado de vehículos.",
       );
+      setVehiculos([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    cargarVehiculos();
+    queueMicrotask(() => {
+      cargarVehiculos();
+    });
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetch = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await vehiculosApi.listar();
+        const lista = Array.isArray(data)
+          ? data
+          : (data as any)?.vehiculos || (data as any)?.content || [];
+        if (isMounted) setVehiculos(lista);
+      } catch (err) {
+        if (isMounted) {
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : "No se pudo cargar el listado de vehículos.",
+          );
+          setVehiculos([]);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetch();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const abrirNuevo = () => {
@@ -117,7 +156,10 @@ const AdminVehiculos = () => {
       if (editingId === null) {
         await vehiculosApi.crear(form);
       } else {
-        const { patente: _patente, ...update }: VehiculoUpdateRequest & {
+        const {
+          patente: _patente,
+          ...update
+        }: VehiculoUpdateRequest & {
           patente?: string;
         } = form;
         await vehiculosApi.actualizar(editingId, update);
@@ -126,7 +168,9 @@ const AdminVehiculos = () => {
       await cargarVehiculos();
     } catch (err) {
       setFormError(
-        err instanceof ApiError ? err.message : "No se pudo guardar el vehículo.",
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo guardar el vehículo.",
       );
     } finally {
       setSaving(false);
@@ -162,53 +206,75 @@ const AdminVehiculos = () => {
       {error && <p className="text-red-400 text-center py-4">{error}</p>}
 
       {!loading && !error && (
-        <TableContainer component={Paper} sx={{ bgcolor: "rgba(255,255,255,0.05)" }}>
+        <TableContainer
+          component={Paper}
+          sx={{ bgcolor: "rgba(255,255,255,0.05)" }}
+        >
           <Table>
             <TableHead>
               <TableRow>
-                {["Patente", "Marca", "Modelo", "Año", "Tipo", "Precio diario", "Estado", "Activo", ""].map(
-                  (h) => (
-                    <TableCell key={h} sx={{ color: "#f3f4f6", fontWeight: 600 }}>
-                      {h}
-                    </TableCell>
-                  ),
-                )}
+                {[
+                  "Patente",
+                  "Marca",
+                  "Modelo",
+                  "Año",
+                  "Tipo",
+                  "Precio diario",
+                  "Estado",
+                  "Activo",
+                  "",
+                ].map((h) => (
+                  <TableCell key={h} sx={{ color: "#f3f4f6", fontWeight: 600 }}>
+                    {h}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {vehiculos.map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{v.patente}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{v.marca}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{v.modelo}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{v.anio}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{v.tipoVehiculo}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>${v.precioDiario}</TableCell>
-                  <TableCell sx={{ color: "#f3f4f6" }}>{v.estado}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={v.activo ? "Activo" : "Inactivo"}
-                      color={v.activo ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => abrirEdicion(v)}>
-                      <EditIcon sx={{ color: "#3b82f6" }} fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => darDeBaja(v)}
-                      disabled={!v.activo}
-                    >
-                      <DeleteIcon sx={{ color: "#f87171" }} fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {vehiculos.length === 0 && (
+              {Array.isArray(vehiculos) &&
+                vehiculos.map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{v.patente}</TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{v.marca}</TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{v.modelo}</TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{v.anio}</TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>
+                      {v.tipoVehiculo}
+                    </TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>
+                      ${v.precioDiario}
+                    </TableCell>
+                    <TableCell sx={{ color: "#f3f4f6" }}>{v.estado}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={v.activo ? "Activo" : "Inactivo"}
+                        color={v.activo ? "success" : "default"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <IconButton size="small" onClick={() => abrirEdicion(v)}>
+                        <EditIcon sx={{ color: "#3b82f6" }} fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => darDeBaja(v)}
+                        disabled={!v.activo}
+                      >
+                        <DeleteIcon
+                          sx={{ color: "#f87171" }}
+                          fontSize="small"
+                        />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {(!Array.isArray(vehiculos) || vehiculos.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={9} sx={{ color: "#f3f4f6", textAlign: "center" }}>
+                  <TableCell
+                    colSpan={9}
+                    sx={{ color: "#f3f4f6", textAlign: "center" }}
+                  >
                     No hay vehículos registrados.
                   </TableCell>
                 </TableRow>
@@ -218,17 +284,29 @@ const AdminVehiculos = () => {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={cerrarDialog} fullWidth maxWidth="sm" disableRestoreFocus>
+      <Dialog
+        open={dialogOpen}
+        onClose={cerrarDialog}
+        fullWidth
+        maxWidth="sm"
+        disableRestoreFocus
+      >
         <DialogTitle>
-          {editingId === null ? "Nuevo vehículo" : `Editar vehículo #${editingId}`}
+          {editingId === null
+            ? "Nuevo vehículo"
+            : `Editar vehículo #${editingId}`}
         </DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+        <DialogContent
+          sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
+        >
           <TextField
             label="Patente"
             value={form.patente}
             onChange={(e) => setForm({ ...form, patente: e.target.value })}
             disabled={editingId !== null}
-            helperText={editingId !== null ? "La patente no se puede modificar" : ""}
+            helperText={
+              editingId !== null ? "La patente no se puede modificar" : ""
+            }
           />
           <TextField
             label="Marca"
