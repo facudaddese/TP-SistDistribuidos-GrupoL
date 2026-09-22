@@ -40,3 +40,10 @@
 - Consulta de reservas GRAPHQL (Backend)
 - Historial de alquileres GRAPHQL (Backend)
 - Dockerización de la base de datos MYSQL.
+
+#### Lucas Cardozo
+
+- Modificación de vehículos (Backend)
+- Consulta de historial de alquileres por cliente (Frontend)
+- Obtener flota de vehículos (Backend)
+
