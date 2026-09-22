@@ -1,4 +1,5 @@
 type Query {
+    obtenerTodosLosVehiculos: [VehiculoDisponible!]!
     consultarDisponibilidad(
         tipo: TipoVehiculo
         marca: String
