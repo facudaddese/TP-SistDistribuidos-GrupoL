@@ -248,13 +248,20 @@ const AdminVehiculos = () => {
                     <TableCell>
                       <Chip
                         label={v.activo ? "Activo" : "Inactivo"}
-                        color={v.activo ? "success" : "default"}
+                        color={v.activo ? "success" : "error"}
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
-                      <IconButton size="small" onClick={() => abrirEdicion(v)}>
-                        <EditIcon sx={{ color: "#3b82f6" }} fontSize="small" />
+                      <IconButton
+                        size="small"
+                        onClick={() => abrirEdicion(v)}
+                        disabled={!v.activo}
+                      >
+                        <EditIcon
+                          sx={{ color: v.activo ? "#3b82f6" : "#6b7280" }}
+                          fontSize="small"
+                        />
                       </IconButton>
                       <IconButton
                         size="small"

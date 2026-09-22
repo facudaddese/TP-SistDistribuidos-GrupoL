@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { OBTENER_TODOS_LOS_VEHICULOS } from "../../graphql/queries";
+import { gql } from "@apollo/client";
 import { useQuery } from "@apollo/client/react";
 
 interface VehiculoGraphQL {
@@ -11,15 +12,32 @@ interface VehiculoGraphQL {
   precioDiario: number;
   patente: string;
   color: string;
+  estado: string;
 }
 
 interface ObtenerTodosData {
   obtenerTodosLosVehiculos: VehiculoGraphQL[];
 }
 
+const QUERY_VEHICULOS = gql`
+  query ObtenerTodosLosVehiculos {
+    obtenerTodosLosVehiculos {
+      id
+      marca
+      modelo
+      anio
+      tipo
+      precioDiario
+      patente
+      color
+      estado
+    }
+  }
+`;
+
 const ListaVehiculos = () => {
   const { data, loading, error } = useQuery<ObtenerTodosData>(
-    OBTENER_TODOS_LOS_VEHICULOS,
+    OBTENER_TODOS_LOS_VEHICULOS || QUERY_VEHICULOS,
   );
 
   const vehiculos = data?.obtenerTodosLosVehiculos || [];
@@ -81,13 +99,22 @@ const ListaVehiculos = () => {
                   </div>
                 </div>
 
-                {/* Botón Reservar por card */}
-                <Link
-                  to={`/reservar?vehiculoId=${v.id}`}
-                  className="mt-6 w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-md transition-colors"
-                >
-                  Reservar
-                </Link>
+                {v.estado?.toUpperCase() === "RESERVADO" ||
+                v.estado?.toUpperCase() === "EN_ALQUILER" ? (
+                  <button
+                    disabled
+                    className="mt-6 w-full text-center bg-gray-600/60 text-gray-400 font-medium py-2 rounded-md cursor-not-allowed border border-gray-500/30"
+                  >
+                    Reservado
+                  </button>
+                ) : (
+                  <Link
+                    to={`/reservar?vehiculoId=${v.id}`}
+                    className="mt-6 w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded-md transition-colors"
+                  >
+                    Reservar
+                  </Link>
+                )}
               </div>
             ))}
 
