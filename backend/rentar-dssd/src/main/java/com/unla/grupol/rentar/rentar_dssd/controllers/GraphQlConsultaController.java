@@ -23,6 +23,11 @@ public class GraphQlConsultaController {
     }
 
     @QueryMapping
+        public List<GraphQlVehiculo> obtenerTodosLosVehiculos() {
+                return consultaService.obtenerTodosLosVehiculos();
+        }
+
+    @QueryMapping
     public List<GraphQlVehiculo> consultarDisponibilidad(
             @Argument TipoVehiculo tipo,
             @Argument String marca,

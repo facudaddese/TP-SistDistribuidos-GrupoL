@@ -7,6 +7,7 @@ type Query {
     indicado. Los filtros de tipo, marca, modelo y rango de precio son
     opcionales; fechaInicio y fechaFin son obligatorios.
     """
+    obtenerTodosLosVehiculos: [VehiculoDisponible!]!
     consultarDisponibilidad(
         tipo: TipoVehiculo
         marca: String
