@@ -39,3 +39,4 @@
 - Consultar disponibilidad GRAPHQL (Backend)
 - Consulta de reservas GRAPHQL (Backend)
 - Historial de alquileres GRAPHQL (Backend)
+- Dockerización de la base de datos MYSQL.
