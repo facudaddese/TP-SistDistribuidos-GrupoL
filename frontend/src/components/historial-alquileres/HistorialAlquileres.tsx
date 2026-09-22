@@ -1,16 +1,49 @@
+import { useState } from "react";
 import { useQuery } from "@apollo/client/react";
 import { HISTORIAL_ALQUILERES } from "../../graphql/queries";
 import type { HistorialAlquileresData } from "../../types/Vehiculo";
 
 const HistorialAlquileres = () => {
+  const [documento, setDocumento] = useState("");
+  const [documentoBuscado, setDocumentoBuscado] = useState("")
   const { data, loading, error } =
-    useQuery<HistorialAlquileresData>(HISTORIAL_ALQUILERES);
+    useQuery<HistorialAlquileresData>(HISTORIAL_ALQUILERES, {
+      variables: { documento: documentoBuscado },
+      skip: !documentoBuscado,
+    });
+  const buscarHistorial = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const documentoNormalizado = documento.trim();
+    setDocumentoBuscado(documentoNormalizado);
+  };
 
   return (
     <section className="bg-gray-50/5 p-4 mx-10">
       <h2 className="text-gray-100 text-[35px] font-medium py-4">
         Historial de alquileres
       </h2>
+
+      <form
+        onSubmit={buscarHistorial}
+        className="flex flex-wrap items-end gap-3 pb-4"
+      >
+        <label className="flex flex-col gap-1 text-gray-100">
+          Documento
+          <input
+            value={documento}
+            onChange={(event) => setDocumento(event.target.value)}
+            className="rounded border border-gray-400 bg-gray-900/40 px-3 py-2 text-gray-100"
+            placeholder="Ingresá el documento"
+            required
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
+        >
+          Buscar
+        </button>
+      </form>
 
       {loading && <p className="text-gray-100 text-center py-4">Cargando...</p>}
 

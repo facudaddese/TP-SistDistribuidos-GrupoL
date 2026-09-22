@@ -1,6 +1,7 @@
 package com.unla.grupol.rentar.rentar_dssd.controllers;
 
 import com.unla.grupol.rentar.rentar_dssd.dtos.request.VehiculoRequestDTO;
+import com.unla.grupol.rentar.rentar_dssd.dtos.request.VehiculoUpdateRequestDTO;
 import com.unla.grupol.rentar.rentar_dssd.dtos.response.VehiculoResponseDTO;
 import com.unla.grupol.rentar.rentar_dssd.services.VehiculoService;
 import jakarta.validation.Valid;
@@ -25,7 +26,7 @@ public class VehiculoController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<VehiculoResponseDTO> updateVehiculo(@PathVariable Long id, @Valid @RequestBody VehiculoRequestDTO request) {
+    public ResponseEntity<VehiculoResponseDTO> updateVehiculo(@PathVariable Long id, @Valid @RequestBody VehiculoUpdateRequestDTO request) {
         VehiculoResponseDTO response = vehiculoService.updateVehiculo(id, request);
         return ResponseEntity.ok(response);
     }
