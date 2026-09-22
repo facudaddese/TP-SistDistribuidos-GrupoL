@@ -1,4 +1,12 @@
+"""
+Operaciones de consulta disponibles para el sistema Rentar (Hito 1 - GraphQL).
+"""
 type Query {
+    """
+    Devuelve los vehículos disponibles para alquiler durante todo el período
+    indicado. Los filtros de tipo, marca, modelo y rango de precio son
+    opcionales; fechaInicio y fechaFin son obligatorios.
+    """
     consultarDisponibilidad(
         tipo: TipoVehiculo
         marca: String
@@ -9,6 +17,11 @@ type Query {
         fechaFin: String!
     ): [VehiculoDisponible!]!
 
+    """
+    Devuelve las reservas registradas. Los clientes solo pueden ver sus
+    propias reservas; el administrador puede consultar las de todos los
+    clientes. Todos los filtros son opcionales.
+    """
     consultarReservas(
         clienteId: ID
         vehiculoId: ID
@@ -17,12 +30,19 @@ type Query {
         fechaInicio: String
         fechaFin: String
     ): [ReservaConsulta!]!
-
+    """
+    Devuelve el historial de alquileres (finalizados y cancelados) del
+    cliente identificado por su número de documento.
+    """
     historialAlquileres(
         documento: String!
     ): [AlquilerHistorial!]!
 }
 
+"""
+Vehículo disponible para alquiler, con los datos necesarios para mostrarlo
+en el listado de disponibilidad.
+"""
 type VehiculoDisponible {
     id: ID!
     marca: String!
@@ -34,6 +54,10 @@ type VehiculoDisponible {
     precioDiario: Float!
 }
 
+"""
+Reserva con el detalle de cliente y vehículo, usada en la pantalla de
+consulta de reservas.
+"""
 type ReservaConsulta {
     id: ID!
     fechaInicio: String!
@@ -45,6 +69,10 @@ type ReservaConsulta {
     vehiculo: VehiculoReserva!
 }
 
+"""
+Alquiler pasado (finalizado o cancelado) de un cliente, para la pantalla
+de historial.
+"""
 type AlquilerHistorial {
     id: ID!
     fechaInicio: String!
@@ -55,12 +83,18 @@ type AlquilerHistorial {
     vehiculo: VehiculoReserva!
 }
 
+"""
+Datos mínimos del cliente asociado a una reserva.
+"""
 type ClienteReserva {
     nombre: String!
     apellido: String!
     documento: String!
 }
 
+"""
+Datos mínimos del vehículo asociado a una reserva.
+"""
 type VehiculoReserva {
     marca: String!
     modelo: String!
@@ -69,6 +103,9 @@ type VehiculoReserva {
     tipo: TipoVehiculo!
 }
 
+"""
+Tipos de carrocería disponibles en la flota de Rentar.
+"""
 enum TipoVehiculo {
     SEDAN
     SUV
@@ -77,8 +114,14 @@ enum TipoVehiculo {
     HATCHBACK
 }
 
+"""
+Estado del ciclo de vida de una reserva.
+"""
 enum EstadoReserva {
+    """Reserva activa y confirmada."""
     CONFIRMADA
+    """Reserva cancelada por el cliente antes de que comience el período."""
     CANCELADA
+    """Alquiler ya finalizado (el período de uso concluyó)."""
     FINALIZADA
 }
