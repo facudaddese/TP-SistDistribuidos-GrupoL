@@ -32,3 +32,10 @@
 - ABM vehículos (Backend)
 - Alta de reserva (Backend)
 - Cancelación de reserva (Backend)
+
+#### Dante Gissara
+
+- ABM Clientes (Backend)
+- Consultar disponibilidad GRAPHQL (Backend)
+- Consulta de reservas GRAPHQL (Backend)
+- Historial de alquileres GRAPHQL (Backend)
