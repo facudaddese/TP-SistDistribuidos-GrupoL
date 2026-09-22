@@ -11,8 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.unla.grupol.rentar.rentar_dssd.dto.graphql.GraphQlClienteReserva;
 import com.unla.grupol.rentar.rentar_dssd.dto.graphql.GraphQlReserva;
 import com.unla.grupol.rentar.rentar_dssd.dto.graphql.GraphQlVehiculoReserva;
-import com.unla.grupol.rentar.rentar_dssd.entities.Reserva;
-import com.unla.grupol.rentar.rentar_dssd.entities.enums.EstadoReserva;
 import com.unla.grupol.rentar.rentar_dssd.repositories.ReservaRepository;
 import com.unla.grupol.rentar.rentar_dssd.dto.graphql.GraphQlAlquiler;
 import java.time.temporal.ChronoUnit;
@@ -39,6 +37,15 @@ public class GraphQlConsultaService {
         this.vehiculoRepository = vehiculoRepository;
         this.reservaRepository = reservaRepository;
     }
+
+    @Transactional(readOnly = true)
+        public List<GraphQlVehiculo> obtenerTodosLosVehiculos() {
+                return vehiculoRepository.findAll()
+                                .stream()
+                                .filter(Vehiculo::isActivo)
+                                .map(this::convertirAVehiculoGraphQl)
+                                .toList();
+        }
 
     @Transactional(readOnly = true)
     public List<GraphQlVehiculo> consultarDisponibilidad(
