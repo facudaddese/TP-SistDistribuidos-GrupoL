@@ -19,6 +19,8 @@
 - Consulta de reservas (GRAPHQL)
 - Historial de alquileres (GRAPHQL)
 - Obtener todos los vehiculos (GRAPHQL)
+- Rental Service (gRPC)
+- Documentación de los endpoints REST mediante Swagger  
 
 #### Marco Carreira
 
