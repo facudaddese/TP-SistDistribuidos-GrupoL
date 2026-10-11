@@ -19,6 +19,8 @@
 - Consulta de reservas (GRAPHQL)
 - Historial de alquileres (GRAPHQL)
 - Obtener todos los vehiculos (GRAPHQL)
+- Rental Service (gRPC)
+- Documentación de los endpoints REST mediante Swagger  
 
 #### Marco Carreira
 
@@ -32,3 +34,18 @@
 - ABM vehículos (Backend)
 - Alta de reserva (Backend)
 - Cancelación de reserva (Backend)
+
+#### Dante Gissara
+
+- ABM Clientes (Backend)
+- Consultar disponibilidad GRAPHQL (Backend)
+- Consulta de reservas GRAPHQL (Backend)
+- Historial de alquileres GRAPHQL (Backend)
+- Dockerización de la base de datos MYSQL.
+
+#### Lucas Cardozo
+
+- Modificación de vehículos (Backend)
+- Consulta de historial de alquileres por cliente (Frontend)
+- Obtener flota de vehículos (Backend)
+
