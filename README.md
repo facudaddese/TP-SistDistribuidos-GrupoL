@@ -20,7 +20,8 @@
 - Historial de alquileres (GRAPHQL)
 - Obtener todos los vehiculos (GRAPHQL)
 - Rental Service (gRPC)
-- Documentación de los endpoints REST mediante Swagger  
+- Documentación de los endpoints REST mediante Swagger
+- API Gateway (Rest/GraphQL)
 
 #### Marco Carreira
 
