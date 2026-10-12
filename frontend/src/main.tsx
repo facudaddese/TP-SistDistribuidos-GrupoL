@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { RolProvider } from "./context/RolContext";
+import { AuthProvider } from "./context/AuthContext";
 import "./index.css";
 import App from "./App.tsx";
 import {
@@ -31,12 +31,12 @@ const client = new ApolloClient({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-      <RolProvider>
-        <BrowserRouter>
-          <ApolloProvider client={client}>
-            <App />
-          </ApolloProvider>
-        </BrowserRouter>
-      </RolProvider>
+    <AuthProvider>
+      <BrowserRouter>
+        <ApolloProvider client={client}>
+          <App />
+        </ApolloProvider>
+      </BrowserRouter>
+    </AuthProvider>
   </StrictMode>,
 );
