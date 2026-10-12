@@ -33,81 +33,87 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
-    private final UsuarioService usuarioService;
+  private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+  private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+  private final UsuarioService usuarioService;
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                        .accessDeniedHandler(jwtAccessDeniedHandler)
-                )
-                .authorizeHttpRequests(auth -> auth
-                        // Rutas públicas de autenticación y salud
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
+  @Bean
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+        .csrf(AbstractHttpConfigurer::disable)
+        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .exceptionHandling(exceptions -> exceptions
+            .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+            .accessDeniedHandler(jwtAccessDeniedHandler))
+        .authorizeHttpRequests(auth -> auth
+            // Documentació pública (Swagger / OpenAPI)
+            .requestMatchers(
+                "/v3/api-docs/**",
+                "/swagger-ui/**",
+                "/swagger-ui.html")
+            .permitAll()
 
-                        // GraphQL (consultas públicas de catálogo/disponibilidad; autenticadas para historial)
-                        .requestMatchers("/graphql/**", "/graphiql/**").permitAll()
+            // Rutes públiques d'autenticació i salut
+            .requestMatchers("/api/auth/**").permitAll()
+            .requestMatchers("/actuator/**").permitAll()
 
-                        // Flota de vehículos: lectura pública (catálogo para clientes y visitantes)
-                        .requestMatchers(HttpMethod.GET, "/api/vehiculos/**").permitAll()
-                        // Modificaciones de vehículos: exclusivo ADMINISTRADOR
-                        .requestMatchers("/api/vehiculos/**").hasRole("ADMINISTRADOR")
+            // GraphQL (consultes públiques de catàleg/disponibilitat; autenticades per a
+            // historial)
+            .requestMatchers("/graphql/**", "/graphiql/**").permitAll()
 
-                        // Gestión de clientes: exclusivo ADMINISTRADOR
-                        .requestMatchers("/api/clientes/**").hasRole("ADMINISTRADOR")
+            // Flota de vehicles: lectura pública (catàleg per a clients i visitants)
+            .requestMatchers(HttpMethod.GET, "/api/vehiculos/**").permitAll()
+            // Modificacions de vehicles: exclusiu ADMINISTRADOR
+            .requestMatchers("/api/vehiculos/**").hasRole("ADMINISTRADOR")
 
-                        // Reservas:
-                        // Creación: exclusivo CLIENTE
-                        .requestMatchers(HttpMethod.POST, "/api/reservas/**").hasRole("CLIENTE")
-                        // Cancelación y consulta: CLIENTE o ADMINISTRADOR
-                        .requestMatchers(HttpMethod.PATCH, "/api/reservas/*/cancelar").hasAnyRole("CLIENTE", "ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.GET, "/api/reservas/**").hasAnyRole("CLIENTE", "ADMINISTRADOR")
+            // Gestió de clients: exclusiu ADMINISTRADOR
+            .requestMatchers("/api/clientes/**").hasRole("ADMINISTRADOR")
 
-                        // Cualquier otra petición requiere autenticación
-                        .anyRequest().authenticated()
-                )
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            // Reserves:
+            // Creació: exclusiu CLIENTE
+            .requestMatchers(HttpMethod.POST, "/api/reservas/**").hasRole("CLIENTE")
+            // Cancel·lació i consulta: CLIENTE o ADMINISTRADOR
+            .requestMatchers(HttpMethod.PATCH, "/api/reservas/*/cancelar").hasAnyRole("CLIENTE", "ADMINISTRADOR")
+            .requestMatchers(HttpMethod.GET, "/api/reservas/**").hasAnyRole("CLIENTE", "ADMINISTRADOR")
 
-        return http.build();
-    }
+            // Qualsevol altra petició requereix autenticació
+            .anyRequest().authenticated())
+        .authenticationProvider(authenticationProvider())
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(usuarioService);
-        authProvider.setPasswordEncoder(passwordEncoder());
-        return authProvider;
-    }
+    return http.build();
+  }
 
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
+  @Bean
+  public AuthenticationProvider authenticationProvider() {
+    DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(usuarioService);
+    authProvider.setPasswordEncoder(passwordEncoder());
+    return authProvider;
+  }
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+  @Bean
+  public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+    return config.getAuthenticationManager();
+  }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With", "Origin"));
-        config.setExposedHeaders(List.of("Authorization"));
-        config.setAllowCredentials(true);
+  @Bean
+  public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+  }
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
-    }
+  @Bean
+  public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration config = new CorsConfiguration();
+    config.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
+    config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With", "Origin"));
+    config.setExposedHeaders(List.of("Authorization"));
+    config.setAllowCredentials(true);
+
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", config);
+    return source;
+  }
 }
