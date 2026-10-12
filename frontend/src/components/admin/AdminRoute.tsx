@@ -1,15 +1,8 @@
-import { Navigate } from "react-router-dom";
 import type { ReactNode } from "react";
-import { useRol } from "../../context/RolContext";
+import ProtectedRoute from "../common/ProtectedRoute";
 
 const AdminRoute = ({ children }: { children: ReactNode }) => {
-  const { rol } = useRol();
-
-  if (rol !== "ADMINISTRADOR") {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
+  return <ProtectedRoute allowedRoles={["ADMINISTRADOR"]}>{children}</ProtectedRoute>;
 };
 
 export default AdminRoute;
