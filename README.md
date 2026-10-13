@@ -43,6 +43,7 @@
 - Consulta de reservas GRAPHQL (Backend)
 - Historial de alquileres GRAPHQL (Backend)
 - Dockerización de la base de datos MYSQL.
+- Vehicle Service (gRPC)
 
 #### Lucas Cardozo
 
