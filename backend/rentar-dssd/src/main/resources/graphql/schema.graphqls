@@ -1,128 +1,83 @@
-"""
-Operaciones de consulta disponibles para el sistema Rentar (Hito 1 - GraphQL).
-"""
 type Query {
-    """
-    Devuelve los vehículos disponibles para alquiler durante todo el período
-    indicado. Los filtros de tipo, marca, modelo y rango de precio son
-    opcionales; fechaInicio y fechaFin son obligatorios.
-    """
-    obtenerTodosLosVehiculos: [VehiculoDisponible!]!
-    consultarDisponibilidad(
-        tipo: TipoVehiculo
-        marca: String
-        modelo: String
-        precioMin: Int
-        precioMax: Int
-        fechaInicio: String!
-        fechaFin: String!
-    ): [VehiculoDisponible!]!
+  obtenerTodosLosVehiculos: [VehiculoDisponible!]!
+  consultarDisponibilidad(
+    tipo: TipoVehiculo
+    marca: String
+    modelo: String
+    precioMin: Int
+    precioMax: Int
+    fechaInicio: String!
+    fechaFin: String!
+  ): [VehiculoDisponible!]!
+  consultarReservas(
+    clienteId: ID
+    vehiculoId: ID
+    tipo: TipoVehiculo
+    estado: EstadoReserva
+    fechaInicio: String
+    fechaFin: String
+  ): [ReservaConsulta!]!
+  historialAlquileres(documento: String!): [AlquilerHistorial!]!
 
-    """
-    Devuelve las reservas registradas. Los clientes solo pueden ver sus
-    propias reservas; el administrador puede consultar las de todos los
-    clientes. Todos los filtros son opcionales.
-    """
-    consultarReservas(
-        clienteId: ID
-        vehiculoId: ID
-        tipo: TipoVehiculo
-        estado: EstadoReserva
-        fechaInicio: String
-        fechaFin: String
-    ): [ReservaConsulta!]!
-    """
-    Devuelve el historial de alquileres (finalizados y cancelados) del
-    cliente identificado por su número de documento.
-    """
-    historialAlquileres(
-        documento: String!
-    ): [AlquilerHistorial!]!
+  pingGateway: String
 }
 
-"""
-Vehículo disponible para alquiler, con los datos necesarios para mostrarlo
-en el listado de disponibilidad.
-"""
 type VehiculoDisponible {
-    id: ID!
-    marca: String!
-    modelo: String!
-    anio: Int!
-    patente: String!
-    color: String
-    tipo: TipoVehiculo!
-    precioDiario: Float!
+  id: ID!
+  marca: String!
+  modelo: String!
+  anio: Int!
+  patente: String!
+  color: String
+  tipo: TipoVehiculo!
+  precioDiario: Float!
 }
 
-"""
-Reserva con el detalle de cliente y vehículo, usada en la pantalla de
-consulta de reservas.
-"""
 type ReservaConsulta {
-    id: ID!
-    fechaInicio: String!
-    fechaFin: String!
-    precioDiario: Float!
-    importeTotal: Float!
-    estado: EstadoReserva!
-    cliente: ClienteReserva!
-    vehiculo: VehiculoReserva!
+  id: ID!
+  fechaInicio: String!
+  fechaFin: String!
+  precioDiario: Float!
+  importeTotal: Float!
+  estado: EstadoReserva!
+  cliente: ClienteReserva!
+  vehiculo: VehiculoReserva!
 }
 
-"""
-Alquiler pasado (finalizado o cancelado) de un cliente, para la pantalla
-de historial.
-"""
 type AlquilerHistorial {
-    id: ID!
-    fechaInicio: String!
-    fechaFin: String!
-    cantDias: Int!
-    importeTotal: Float!
-    estado: EstadoReserva!
-    vehiculo: VehiculoReserva!
+  id: ID!
+  fechaInicio: String!
+  fechaFin: String!
+  cantDias: Int!
+  importeTotal: Float!
+  estado: EstadoReserva!
+  vehiculo: VehiculoReserva!
 }
 
-"""
-Datos mínimos del cliente asociado a una reserva.
-"""
 type ClienteReserva {
-    nombre: String!
-    apellido: String!
-    documento: String!
+  nombre: String!
+  apellido: String!
+  documento: String!
 }
 
-"""
-Datos mínimos del vehículo asociado a una reserva.
-"""
 type VehiculoReserva {
-    marca: String!
-    modelo: String!
-    anio: Int!
-    patente: String!
-    tipo: TipoVehiculo!
+  marca: String!
+  modelo: String!
+  anio: Int!
+  patente: String!
+  tipo: TipoVehiculo!
 }
 
-"""
-Tipos de carrocería disponibles en la flota de Rentar.
-"""
 enum TipoVehiculo {
-    SEDAN
-    SUV
-    PICKUP
-    COUPE
-    HATCHBACK
+  SEDAN
+  SUV
+  PICKUP
+  COUPE
+  HATCHBACK
 }
 
-"""
-Estado del ciclo de vida de una reserva.
-"""
 enum EstadoReserva {
-    """Reserva activa y confirmada."""
-    CONFIRMADA
-    """Reserva cancelada por el cliente antes de que comience el período."""
-    CANCELADA
-    """Alquiler ya finalizado (el período de uso concluyó)."""
-    FINALIZADA
+  CONFIRMADA
+  CANCELADA
+  FINALIZADA
 }

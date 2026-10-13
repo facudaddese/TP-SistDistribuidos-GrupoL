@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package rental;
+
+service RentalService {
+  rpc CrearReserva (CrearReservaRequest) returns (ReservaResponse);
+  rpc ConsultarReservas (ConsultarReservasRequest) returns (ListaReservasResponse);
+  rpc CancelarReserva (CancelarReservaRequest) returns (ReservaResponse);
+  rpc ConsultarHistorial (ConsultarHistorialRequest) returns (ListaReservasResponse);
+}
+
+message CrearReservaRequest {
+  int32 clienteId = 1;
+  int32 vehiculoId = 2;
+  string fechaHoraInicio = 3;
+  string fechaHoraFin = 4;
+  double importeTotal = 5;
+}
+
+message CancelarReservaRequest {
+  int32 id = 1;
+}
+
+message ConsultarReservasRequest {
+  int32 clienteId = 1;
+  int32 vehiculoId = 2;
+  string estado = 3;
+}
+
+message ConsultarHistorialRequest {
+  int32 clienteId = 1;
+}
+
+message ReservaResponse {
+  int32 id = 1;
+  int32 clienteId = 2;
+  int32 vehiculoId = 3;
+  string fechaHoraInicio = 4;
+  string fechaHoraFin = 5;
+  double importeTotal = 6;
+  string estado = 7;
+}
+
+message ListaReservasResponse {
+  repeated ReservaResponse reservas = 1;
+}

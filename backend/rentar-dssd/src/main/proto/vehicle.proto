@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package vehicle;
+
+option java_package = "com.unla.grupol.rentar.grpc.vehicle";
+option java_multiple_files = true;
+
+// Servicio responsable del dominio de vehículos.
+// Los errores se comunican mediante códigos de estado gRPC.
+service VehicleService {
+  // Lista vehículos; permite limitar el resultado a los activos.
+  rpc ConsultarVehiculos (ConsultarVehiculosRequest)
+      returns (ListaVehiculosResponse);
+
+  // Consulta por ID. Devuelve NOT_FOUND si no existe.
+  rpc ConsultarVehiculo (VehiculoIdRequest)
+      returns (VehiculoResponse);
+
+  // Crea un vehículo activo con estado DISPONIBLE.
+  rpc CrearVehiculo (CrearVehiculoRequest)
+      returns (VehiculoResponse);
+
+  // Modifica sus datos. La patente es inmutable.
+  rpc ModificarVehiculo (ModificarVehiculoRequest)
+      returns (VehiculoResponse);
+
+  // Realiza una baja lógica, conservando el registro.
+  rpc DarDeBajaVehiculo (VehiculoIdRequest)
+      returns (VehiculoResponse);
+
+  // Actualiza el estado operativo del vehículo.
+  rpc ActualizarEstado (ActualizarEstadoRequest)
+      returns (VehiculoResponse);
+
+  // Consulta disponibilidad para un período y filtros opcionales.
+  // La implementación deberá considerar reservas superpuestas.
+  rpc ConsultarDisponibilidad (ConsultarDisponibilidadRequest)
+      returns (ListaVehiculosResponse);
+}
+
+message ConsultarVehiculosRequest {
+  bool soloActivos = 1;
+}
+
+message VehiculoIdRequest {
+  int64 id = 1;
+}
+
+message CrearVehiculoRequest {
+  string patente = 1;
+  string marca = 2;
+  string modelo = 3;
+  int32 anio = 4;
+  string color = 5;
+
+  // SEDAN, SUV, PICKUP, COUPE o HATCHBACK.
+  string tipoVehiculo = 6;
+
+  // Importe decimal, por ejemplo "25000.00".
+  string precioDiario = 7;
+}
+
+message ModificarVehiculoRequest {
+  int64 id = 1;
+  string marca = 2;
+  string modelo = 3;
+  int32 anio = 4;
+  string color = 5;
+  string tipoVehiculo = 6;
+  string precioDiario = 7;
+}
+
+message ActualizarEstadoRequest {
+  int64 id = 1;
+
+  // DISPONIBLE, RESERVADO o EN_ALQUILER.
+  string estado = 2;
+}
+
+message ConsultarDisponibilidadRequest {
+  // Fechas obligatorias en formato ISO-8601.
+  string fechaInicio = 1;
+  string fechaFin = 2;
+
+  // Filtros opcionales.
+  optional string tipoVehiculo = 3;
+  optional string marca = 4;
+  optional string modelo = 5;
+  optional string precioMin = 6;
+  optional string precioMax = 7;
+}
+
+message VehiculoResponse {
+  int64 id = 1;
+  string patente = 2;
+  string marca = 3;
+  string modelo = 4;
+  int32 anio = 5;
+  string color = 6;
+  string tipoVehiculo = 7;
+  string precioDiario = 8;
+  string estado = 9;
+  bool activo = 10;
+}
+
+message ListaVehiculosResponse {
+  repeated VehiculoResponse vehiculos = 1;
+}
