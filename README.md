@@ -35,6 +35,8 @@
 - ABM vehículos (Backend)
 - Alta de reserva (Backend)
 - Cancelación de reserva (Backend)
+- Implementacion del Login (Backend)
+- Diseño del login (Frontend)
 
 #### Dante Gissara
 
