@@ -27,5 +27,27 @@ services:
       retries: 10
       start_period: 30s
 
+    rabbitmq:
+      image: rabbitmq:3-management
+      container_name: rentar-rabbitmq
+      restart: unless-stopped
+      ports:
+        - "${RABBITMQ_PORT:-5672}:5672"         # Puerto protocolo AMQP
+        - "${RABBITMQ_MGMT_PORT:-15672}:15672"  # Panel de administración Web UI
+      environment:
+        RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rentar_rabbit}
+        RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rentar_rabbit_pass}
+      volumes:
+        - rabbitmq_data:/var/lib/rabbitmq
+      healthcheck:
+        test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 20s
+
 volumes:
   mysql_data:
+  rabbitmq_data:
+
+  
