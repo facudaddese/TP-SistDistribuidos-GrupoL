@@ -34,6 +34,7 @@ interface RentalClient extends grpc.Client {
     ): grpc.ClientUnaryCall;
 }
 
+// TODO: Eliminar rental.proto y este cliente en el Paso 1.4 al quitar la dependencia de vehicle-service hacia Rental Service.
 const definition = protoLoader.loadSync(
     path.resolve(__dirname, "../proto/rental.proto"),
     {

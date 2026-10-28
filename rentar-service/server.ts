@@ -4,7 +4,7 @@ import * as protoLoader from "@grpc/proto-loader";
 import path from "path";
 
 // 1. Cargar el archivo .proto
-const PROTO_PATH = path.resolve(__dirname, "./rental.proto");
+const PROTO_PATH = path.resolve(__dirname, "./proto/rental.proto");
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   keepCase: true,
   longs: String,

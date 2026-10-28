@@ -6,7 +6,7 @@ import { handlers } from "./handlers";
 
 import { cerrarRentalClient } from "./rentalClient";
 
-const PROTO_PATH = path.resolve(__dirname, "../vehicle.proto");
+const PROTO_PATH = path.resolve(__dirname, "../proto/vehicle.proto");
 
 async function main(): Promise<void> {
     const host = process.env.GRPC_HOST ?? "0.0.0.0";
