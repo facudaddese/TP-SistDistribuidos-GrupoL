@@ -3,6 +3,7 @@ import * as clienteRepository from './clienteRepository.js';
 import {
   ConsultarClientesRequest,
   ConsultarClienteRequest,
+  ConsultarClientePorDocumentoRequest,
   VerificarClienteRequest,
   ClienteResponse,
   ListaClientesResponse,
@@ -112,6 +113,40 @@ export const handlers = {
       callback({
         code: grpc.status.INTERNAL,
         message: 'Error interno del servidor al verificar estado activo',
+      }, null);
+    }
+  },
+
+  ConsultarClientePorDocumento: async (
+    call: grpc.ServerUnaryCall<ConsultarClientePorDocumentoRequest, ClienteResponse>,
+    callback: grpc.sendUnaryData<ClienteResponse>
+  ) => {
+    try {
+      const { documento } = call.request;
+      console.log(`[RPC] ConsultarClientePorDocumento`);
+
+      if (!documento || typeof documento !== 'string' || !/^[a-zA-Z0-9]{1,20}$/.test(documento)) {
+        return callback({
+          code: grpc.status.INVALID_ARGUMENT,
+          message: 'El documento debe ser alfanumérico y tener como máximo 20 caracteres',
+        }, null);
+      }
+
+      const cliente = await clienteRepository.consultarClientePorDocumento(documento);
+
+      if (!cliente) {
+        return callback({
+          code: grpc.status.NOT_FOUND,
+          message: 'Cliente no encontrado',
+        }, null);
+      }
+
+      callback(null, cliente);
+    } catch (error) {
+      console.error('[RPC Error] ConsultarClientePorDocumento:', error);
+      callback({
+        code: grpc.status.INTERNAL,
+        message: 'Error interno del servidor al consultar cliente',
       }, null);
     }
   }

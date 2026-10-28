@@ -6,6 +6,10 @@ export interface ConsultarClienteRequest {
   id: number;
 }
 
+export interface ConsultarClientePorDocumentoRequest {
+  documento: string;
+}
+
 export interface VerificarClienteRequest {
   id: number;
 }

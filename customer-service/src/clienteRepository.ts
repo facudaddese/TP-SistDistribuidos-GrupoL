@@ -74,6 +74,25 @@ export async function consultarCliente(id: number): Promise<ClienteResponse | nu
   return mapRowToClienteResponse(clientes[0]!);
 }
 
+export async function consultarClientePorDocumento(documento: string): Promise<ClienteResponse | null> {
+  const query = `
+    SELECT u.id, u.email, u.activo, c.documento, c.nombre, c.apellido,
+           c.telefono, c.fecha_nacimiento as fechaNacimiento
+    FROM usuario u
+    JOIN cliente c ON c.usuario_id = u.id
+    WHERE u.rol = 'CLIENTE' AND c.documento = ?
+  `;
+  
+  const [rows] = await pool.query(query, [documento]);
+  const clientes = rows as ClienteRow[];
+
+  if (clientes.length === 0) {
+    return null;
+  }
+  
+  return mapRowToClienteResponse(clientes[0]!);
+}
+
 export async function verificarExistencia(id: number): Promise<boolean> {
   const query = `
     SELECT 1
