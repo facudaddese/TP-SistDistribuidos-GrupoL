@@ -11,3 +11,21 @@
 # Operating system
 .DS_Store
 Thumbs.db
+
+# Dependencias y configuracion local
+**/node_modules/
+.env
+.env.*
+!**/.env.example
+
+# Dependencias y configuracion local
+**/node_modules/
+.env
+.env.*
+!**/.env.example
+
+# Dependencias y configuracion local
+**/node_modules/
+.env
+.env.*
+!**/.env.example
