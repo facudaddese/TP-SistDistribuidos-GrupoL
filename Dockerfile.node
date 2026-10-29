@@ -1,0 +1,13 @@
+﻿FROM node:24-bookworm-slim
+
+ARG SERVICE_DIR
+WORKDIR /app
+
+COPY ${SERVICE_DIR}/package.json ${SERVICE_DIR}/package-lock.json ./
+RUN npm ci --include=dev
+
+COPY ${SERVICE_DIR}/ ./
+
+ENV NODE_ENV=production
+
+CMD ["node", "--import", "tsx", "src/server.ts"]

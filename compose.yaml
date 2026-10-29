@@ -1,53 +1,167 @@
+﻿x-grpc-health: &grpc-health
+  test:
+    - CMD
+    - node
+    - -e
+    - "const s=require('node:net').connect(Number(process.env.GRPC_PORT),'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));s.setTimeout(3000,()=>process.exit(1));"
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  start_period: 20s
+
+x-db-env: &db-env
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_NAME: ${MYSQL_DATABASE:-rentar_db}
+  DB_USER: ${MYSQL_USER:-rentar_user}
+  DB_PASSWORD: ${MYSQL_PASSWORD:-rentar_password}
+
 services:
   mysql:
     image: mysql:8.4
-    container_name: rentar-mysql
     restart: unless-stopped
-
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
-
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-rentar_db}
+      MYSQL_USER: ${MYSQL_USER:-rentar_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-rentar_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rentar_root_password}
     volumes:
       - mysql_data:/var/lib/mysql
-
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"
-        ]
+        - CMD-SHELL
+        - 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysql -h 127.0.0.1 -u "$${MYSQL_USER}" "$${MYSQL_DATABASE}" -e "SELECT 1"'
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 18
+      start_period: 40s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rentar_rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rentar_rabbit_pass}
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
       start_period: 30s
 
-    rabbitmq:
-      image: rabbitmq:3-management
-      container_name: rentar-rabbitmq
-      restart: unless-stopped
-      ports:
-        - "${RABBITMQ_PORT:-5672}:5672"         # Puerto protocolo AMQP
-        - "${RABBITMQ_MGMT_PORT:-15672}:15672"  # Panel de administración Web UI
-      environment:
-        RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rentar_rabbit}
-        RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rentar_rabbit_pass}
-      volumes:
-        - rabbitmq_data:/var/lib/rabbitmq
-      healthcheck:
-        test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
-        interval: 10s
-        timeout: 5s
-        retries: 5
-        start_period: 20s
+  customer-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+      args:
+        SERVICE_DIR: customer-service
+    init: true
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      GRPC_PORT: "50051"
+    ports:
+      - "127.0.0.1:50051:50051"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck: *grpc-health
+
+  rental-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+      args:
+        SERVICE_DIR: rentar-service
+    command: ["node", "--import", "tsx", "server.ts"]
+    init: true
+    restart: unless-stopped
+    environment:
+      GRPC_PORT: "50053"
+    ports:
+      - "127.0.0.1:50053:50053"
+    healthcheck: *grpc-health
+
+  vehicle-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+      args:
+        SERVICE_DIR: vehicle-service
+    init: true
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      GRPC_HOST: "0.0.0.0"
+      GRPC_PORT: "50052"
+      RENTAL_GRPC_ADDRESS: rental-service:50053
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER:-rentar_rabbit}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rentar_rabbit_pass}
+    ports:
+      - "127.0.0.1:50052:50052"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rental-service:
+        condition: service_healthy
+    healthcheck: *grpc-health
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-rentar_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      DB_USER: ${MYSQL_USER:-rentar_user}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-rentar_password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER:-rentar_rabbit}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rentar_rabbit_pass}
+    command:
+      - "--grpc.client.customer-service.address=static://customer-service:50051"
+      - "--grpc.client.vehicle-service.address=static://vehicle-service:50052"
+      - "--grpc.client.rental-service.address=static://rental-service:50053"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      customer-service:
+        condition: service_healthy
+      vehicle-service:
+        condition: service_healthy
+      rental-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
 
 volumes:
   mysql_data:
   rabbitmq_data:
-
-  
