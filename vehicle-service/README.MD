@@ -5,7 +5,7 @@ Expone operaciones gRPC y persiste los vehículos en MySQL.
 
 ## Operaciones
 
-Contrato: `vehicle.proto`.
+Contrato: `proto/vehicle.proto`.
 
 | Método | Descripción |
 |---|---|
@@ -15,21 +15,19 @@ Contrato: `vehicle.proto`.
 | ModificarVehiculo | Modifica los datos sin cambiar patente, estado ni activo. |
 | DarDeBajaVehiculo | Realiza una baja lógica. |
 | ActualizarEstado | Cambia el estado operativo del vehículo. |
-| ConsultarDisponibilidad | Filtra vehículos activos y excluye reservas confirmadas superpuestas. |
+| BuscarVehiculosDisponibles | Filtra vehículos activos según atributos opcionales y excluyendo los IDs indicados. |
 
 Estados: `DISPONIBLE`, `RESERVADO`, `EN_ALQUILER`.
 
 Tipos: `SEDAN`, `SUV`, `PICKUP`, `COUPE`, `HATCHBACK`.
 
 Los IDs se representan como strings para conservar precisión de int64.
-Los precios se representan como strings decimales, compatibles con
-DECIMAL(10,2).
+Los precios se representan como strings decimales, compatibles con DECIMAL(10,2).
 
 ## Requisitos
 
 - Node.js y npm.
 - MySQL con la tabla `vehiculo` del Hito 1.
-- Rental Service disponible para consultar disponibilidad.
 
 El servicio no crea las tablas automáticamente.
 
@@ -54,7 +52,6 @@ DB_PORT=3306
 DB_USER=rentar_user
 DB_PASSWORD=rentar_password
 DB_NAME=rentar_db
-RENTAL_GRPC_ADDRESS=localhost:50053
 ```
 
 No versionar `.env`.
@@ -74,36 +71,22 @@ npm.cmd start
 
 El servidor utiliza gRPC sin TLS para el entorno local de desarrollo.
 
-## Disponibilidad
+## Búsqueda de Vehículos Disponibles
 
-Vehicle consulta `ConsultarReservas` de Rental mediante gRPC,
-solicitando reservas CONFIRMADAS.
-
-Una reserva se superpone cuando:
-
-```text
-inicioSolicitado < finReserva
-y
-finSolicitado > inicioReserva
-```
-
-Los períodos contiguos no se superponen. Las reservas canceladas no
-bloquean disponibilidad.
-
-Filtros opcionales: tipoVehiculo, marca, modelo, precioMin y precioMax.
-Marca y modelo se comparan por coincidencia parcial sin distinguir
-mayúsculas.
-
-La llamada a Rental tiene un plazo de cinco segundos. Si no se puede
-consultar, la operación devuelve un error y no informa disponibilidad.
-
-Contrato utilizado de Rental: `proto/rental.proto`.
-Mantener esta copia sincronizada con el contrato del servicio proveedor.
+El servicio expone el RPC `BuscarVehiculosDisponibles`:
+- Vehicle Service es independiente de Rental Service: ya no conoce fechas ni reservas.
+- La superposición de reservas temporales la resuelve el **API Gateway**, consultando los vehículos ocupados a **Rental Service** (`ConsultarVehiculosOcupados`) y enviando la lista resultante en el campo `idsExcluidos`.
+- Filtros opcionales:
+  - `tipoVehiculo`: SEDAN, SUV, PICKUP, COUPE o HATCHBACK.
+  - `marca`: coincidencia parcial sin distinguir mayúsculas.
+  - `modelo`: coincidencia parcial sin distinguir mayúsculas.
+  - `precioMin` y `precioMax`: rango decimal con hasta dos decimales.
+  - `idsExcluidos`: lista de hasta 1000 identificadores a omitir del resultado (excluidos en la consulta SQL mediante `NOT IN (?)` parametrizado).
+- Solo se retornan vehículos con `activo = 1`.
 
 ## Pruebas manuales
 
-En Postman, crear una solicitud gRPC a `localhost:50052`, desactivar TLS
-e importar `vehicle.proto`.
+En Postman, crear una solicitud gRPC a `localhost:50052`, desactivar TLS e importar `proto/vehicle.proto`.
 
 Ejemplo de alta:
 
@@ -119,36 +102,21 @@ Ejemplo de alta:
 }
 ```
 
-Ejemplo de disponibilidad:
+Ejemplo de búsqueda de disponibles:
 
 ```json
 {
-  "fechaInicio": "2026-11-01T10:00:00Z",
-  "fechaFin": "2026-11-03T10:00:00Z"
+  "tipoVehiculo": "SEDAN",
+  "marca": "Toyota",
+  "precioMin": "10000.00",
+  "precioMax": "50000.00",
+  "idsExcluidos": [1, 2]
 }
 ```
 
-Se realizaron pruebas manuales de consulta, alta y patente duplicada,
-modificación, validación de precio, baja lógica, actualización de estado,
-Rental no disponible, reserva superpuesta y períodos contiguos.
-
 ## Errores
 
-- INVALID_ARGUMENT: datos inválidos.
-- NOT_FOUND: vehículo inexistente.
-- ALREADY_EXISTS: patente duplicada.
-- UNAVAILABLE: Rental no disponible o plazo de consulta agotado.
-- INTERNAL: fallo interno.
-
-## Alcance y pendientes
-
-- La disponibilidad depende de las reservas que expone Rental.
-  Su implementación inicial en memoria no incluye las reservas históricas
-  de MySQL y pierde los datos al reiniciarse.
-- La baja lógica no cancela reservas existentes.
-- ActualizarEstado valida el valor del estado; no coordina por sí mismo
-  el ciclo de reservas.
-- La consulta de disponibilidad no garantiza exclusividad al reservar:
-  Rental debe prevenir reservas simultáneas superpuestas.
-- Falta integrar el servicio con el API Gateway y la ejecución conjunta
-  del proyecto.
+- `INVALID_ARGUMENT`: datos inválidos (formato de precio, tipo de vehículo desconocido, más de 1000 IDs excluidos o IDs con formato erróneo).
+- `NOT_FOUND`: vehículo inexistente.
+- `ALREADY_EXISTS`: patente duplicada.
+- `INTERNAL`: fallo interno del servidor.

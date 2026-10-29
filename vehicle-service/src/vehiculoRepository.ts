@@ -192,3 +192,22 @@ export async function actualizarEstado(
 
     return consultarVehiculo(id);
 }
+
+export async function buscarVehiculosDisponibles(
+    idsExcluidos?: string[],
+): Promise<VehiculoResponse[]> {
+    const params: string[] = [];
+    let sql = `SELECT ${COLUMNAS} FROM vehiculo WHERE activo = 1`;
+
+    if (idsExcluidos && idsExcluidos.length > 0) {
+        const placeholders = idsExcluidos.map(() => "?").join(", ");
+        sql += ` AND id NOT IN (${placeholders})`;
+        params.push(...idsExcluidos);
+    }
+
+    sql += " ORDER BY id";
+
+    const [rows] = await pool.execute<VehiculoRow[]>(sql, params);
+    return rows.map(convertirVehiculo);
+}
+

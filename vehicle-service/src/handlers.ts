@@ -8,13 +8,21 @@ import type {
     VehiculoResponse,
     ModificarVehiculoRequest,
     ActualizarEstadoRequest,
-    ConsultarDisponibilidadRequest,
+    BuscarVehiculosDisponiblesRequest,
 } from "./types";
 
-import {
-    consultarDisponibilidad as buscarDisponibilidad,
-    ErrorValidacion,
-} from "./disponibilidadService";
+class ErrorValidacion extends Error {}
+
+function precioEnCentavos(valor: string, campo: string): bigint {
+    if (!/^\d{1,8}(\.\d{1,2})?$/.test(valor)) {
+        throw new ErrorValidacion(
+            `${campo} debe ser un decimal no negativo con hasta 2 decimales`,
+        );
+    }
+
+    const [entero, decimal = ""] = valor.split(".");
+    return BigInt(entero!) * 100n + BigInt(decimal.padEnd(2, "0"));
+}
 
 import { TIPOS_VEHICULO, ESTADOS_VEHICULO } from "./types";
 
@@ -331,44 +339,123 @@ const actualizarEstado: grpc.handleUnaryCall<
     }
 };
 
-const consultarDisponibilidad: grpc.handleUnaryCall<
-    ConsultarDisponibilidadRequest,
+const buscarVehiculosDisponibles: grpc.handleUnaryCall<
+    BuscarVehiculosDisponiblesRequest,
     ListaVehiculosResponse
 > = async (call, callback) => {
     try {
-        const vehiculos = await buscarDisponibilidad(call.request);
+        const {
+            tipoVehiculo,
+            marca,
+            modelo,
+            precioMin,
+            precioMax,
+            idsExcluidos,
+        } = call.request;
 
-        callback(null, { vehiculos });
+        // Validar idsExcluidos si existen
+        if (idsExcluidos !== undefined && idsExcluidos !== null) {
+            if (!Array.isArray(idsExcluidos)) {
+                return callback({
+                    code: grpc.status.INVALID_ARGUMENT,
+                    message: "La lista de IDs excluidos debe ser un arreglo",
+                });
+            }
+
+            if (idsExcluidos.length > 1000) {
+                return callback({
+                    code: grpc.status.INVALID_ARGUMENT,
+                    message:
+                        "La lista de IDs excluidos no puede superar los 1000 elementos",
+                });
+            }
+
+            const idRegex = /^[1-9][0-9]{0,18}$/;
+            for (const id of idsExcluidos) {
+                if (typeof id !== "string" || !idRegex.test(id)) {
+                    return callback({
+                        code: grpc.status.INVALID_ARGUMENT,
+                        message: "Uno o más IDs excluidos son inválidos",
+                    });
+                }
+            }
+        }
+
+        if (
+            tipoVehiculo !== undefined &&
+            tipoVehiculo !== "" &&
+            !TIPOS_VEHICULO.some((tipo) => tipo === tipoVehiculo)
+        ) {
+            return callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: "El tipo de vehículo es inválido",
+            });
+        }
+
+        let precioMinCentavos: bigint | undefined = undefined;
+        let precioMaxCentavos: bigint | undefined = undefined;
+
+        if (precioMin !== undefined && precioMin !== "") {
+            precioMinCentavos = precioEnCentavos(precioMin, "precioMin");
+        }
+
+        if (precioMax !== undefined && precioMax !== "") {
+            precioMaxCentavos = precioEnCentavos(precioMax, "precioMax");
+        }
+
+        if (
+            precioMinCentavos !== undefined &&
+            precioMaxCentavos !== undefined &&
+            precioMinCentavos > precioMaxCentavos
+        ) {
+            return callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: "precioMin no puede ser mayor a precioMax",
+            });
+        }
+
+        const marcaFiltro = (marca ?? "").trim().toLowerCase();
+        const modeloFiltro = (modelo ?? "").trim().toLowerCase();
+
+        const vehiculos = await vehiculoRepository.buscarVehiculosDisponibles(
+            idsExcluidos && idsExcluidos.length > 0 ? idsExcluidos : undefined,
+        );
+
+        const vehiculosFiltrados = vehiculos.filter((vehiculo) => {
+            const precio = precioEnCentavos(
+                vehiculo.precioDiario,
+                "precioDiario",
+            );
+
+            return (
+                (tipoVehiculo === undefined ||
+                    tipoVehiculo === "" ||
+                    vehiculo.tipoVehiculo === tipoVehiculo) &&
+                vehiculo.marca.toLowerCase().includes(marcaFiltro) &&
+                vehiculo.modelo.toLowerCase().includes(modeloFiltro) &&
+                (precioMinCentavos === undefined ||
+                    precio >= precioMinCentavos) &&
+                (precioMaxCentavos === undefined ||
+                    precio <= precioMaxCentavos)
+            );
+        });
+
+        callback(null, { vehiculos: vehiculosFiltrados });
     } catch (error) {
         if (error instanceof ErrorValidacion) {
-            callback({
+            return callback({
                 code: grpc.status.INVALID_ARGUMENT,
                 message: error.message,
             });
-            return;
         }
 
-        console.error("[VehicleService] Error de disponibilidad:", error);
-
-        if (
-            typeof error === "object" &&
-            error !== null &&
-            "code" in error &&
-            (
-                error.code === grpc.status.UNAVAILABLE ||
-                error.code === grpc.status.DEADLINE_EXCEEDED
-            )
-        ) {
-            callback({
-                code: grpc.status.UNAVAILABLE,
-                message: "No se pudo consultar Rental Service",
-            });
-            return;
-        }
-
+        console.error(
+            "[VehicleService] Error al buscar vehículos disponibles:",
+            error,
+        );
         callback({
             code: grpc.status.INTERNAL,
-            message: "Error interno al consultar disponibilidad",
+            message: "Error interno al buscar vehículos disponibles",
         });
     }
 };
@@ -380,5 +467,5 @@ export const handlers = {
     ModificarVehiculo: modificarVehiculo,
     DarDeBajaVehiculo: darDeBajaVehiculo,
     ActualizarEstado: actualizarEstado,
-    ConsultarDisponibilidad: consultarDisponibilidad,
+    BuscarVehiculosDisponibles: buscarVehiculosDisponibles,
 };

@@ -3,9 +3,6 @@ import * as protoLoader from "@grpc/proto-loader";
 import path from "node:path";
 import { pool, testConnection } from "./db";
 import { handlers } from "./handlers";
-
-import { cerrarRentalClient } from "./rentalClient";
-
 const PROTO_PATH = path.resolve(__dirname, "../proto/vehicle.proto");
 
 async function main(): Promise<void> {
@@ -68,7 +65,6 @@ async function main(): Promise<void> {
 
         server.tryShutdown(() => {
             clearTimeout(timeout);
-            cerrarRentalClient();
 
             void pool.end().catch((error: unknown) => {
                 console.error("[VehicleService] Error al cerrar MySQL:", error);
@@ -84,6 +80,5 @@ async function main(): Promise<void> {
 void main().catch(async (error: unknown) => {
     console.error("[VehicleService] No se pudo iniciar:", error);
     process.exitCode = 1;
-    cerrarRentalClient();
     await pool.end();
 });

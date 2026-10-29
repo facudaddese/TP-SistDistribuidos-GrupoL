@@ -60,12 +60,11 @@ export interface ActualizarEstadoRequest {
     id: string;
     estado: string;
 }
-export interface ConsultarDisponibilidadRequest {
-    fechaInicio: string;
-    fechaFin: string;
+export interface BuscarVehiculosDisponiblesRequest {
     tipoVehiculo?: string;
     marca?: string;
     modelo?: string;
     precioMin?: string;
     precioMax?: string;
+    idsExcluidos?: string[];
 }
