@@ -121,9 +121,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ApiError> manejarArgumentoInvalido(
-            IllegalArgumentException exception
+            RuntimeException exception
     ) {
         ApiError error = crearError(
                 HttpStatus.CONFLICT,
