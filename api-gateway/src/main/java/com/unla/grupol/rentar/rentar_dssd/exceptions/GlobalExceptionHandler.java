@@ -1,5 +1,9 @@
 package com.unla.grupol.rentar.rentar_dssd.exceptions;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,6 +21,66 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(StatusRuntimeException.class)
+    public ResponseEntity<ApiError> manejarStatusRuntimeException(
+            StatusRuntimeException exception
+    ) {
+        Status status = exception.getStatus();
+        Status.Code code = status.getCode();
+        String description = status.getDescription();
+
+        // El detalle completo va solo al log (sin exponer contraseñas ni datos sensibles). Nunca devolver stack traces al cliente.
+        log.error("Excepción gRPC capturada: código={}, descripción={}", code, description);
+
+        HttpStatus httpStatus;
+        String mensajeRespuesta;
+
+        switch (code) {
+            case NOT_FOUND -> {
+                httpStatus = HttpStatus.NOT_FOUND;
+                mensajeRespuesta = (description != null && !description.isBlank())
+                        ? description
+                        : "Recurso no encontrado";
+            }
+            case INVALID_ARGUMENT -> {
+                httpStatus = HttpStatus.BAD_REQUEST;
+                mensajeRespuesta = (description != null && !description.isBlank())
+                        ? description
+                        : "Los datos enviados no son válidos";
+            }
+            case ALREADY_EXISTS -> {
+                httpStatus = HttpStatus.CONFLICT;
+                mensajeRespuesta = (description != null && !description.isBlank())
+                        ? description
+                        : "El recurso ya existe";
+            }
+            case FAILED_PRECONDITION -> {
+                httpStatus = HttpStatus.CONFLICT;
+                mensajeRespuesta = (description != null && !description.isBlank())
+                        ? description
+                        : "No se cumplen las precondiciones para la operación";
+            }
+            case UNAVAILABLE, DEADLINE_EXCEEDED -> {
+                httpStatus = HttpStatus.SERVICE_UNAVAILABLE;
+                mensajeRespuesta = "Servicio temporalmente no disponible";
+            }
+            default -> {
+                httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
+                mensajeRespuesta = "Error interno del servidor";
+            }
+        }
+
+        ApiError error = crearError(
+                httpStatus,
+                mensajeRespuesta,
+                Map.of()
+        );
+
+        return ResponseEntity.status(httpStatus).body(error);
+    }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
     public ResponseEntity<ApiError> manejarRecursoNoEncontrado(
