@@ -3,82 +3,95 @@ import * as protoLoader from "@grpc/proto-loader";
 import path from "node:path";
 import { pool, testConnection } from "./db";
 import { handlers } from "./handlers";
+import { iniciarWorkerPolicial } from "./policialWorker";
+import { escucharResultadosVerificacion } from "./verificacionConsumer";
+
 const PROTO_PATH = path.resolve(__dirname, "../proto/vehicle.proto");
 
 async function main(): Promise<void> {
-    const host = process.env.GRPC_HOST ?? "0.0.0.0";
-    const port = Number(process.env.GRPC_PORT ?? "50052");
+  const host = process.env.GRPC_HOST ?? "0.0.0.0";
+  const port = Number(process.env.GRPC_PORT ?? "50052");
 
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-        throw new Error("GRPC_PORT debe ser un puerto válido");
-    }
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error("GRPC_PORT debe ser un puerto válido");
+  }
 
-    const definition = protoLoader.loadSync(PROTO_PATH, {
-        keepCase: true,
-        longs: String,
-        enums: String,
-        defaults: true,
-        oneofs: true,
-    });
+  const definition = protoLoader.loadSync(PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
 
-    const descriptor = grpc.loadPackageDefinition(definition);
-    const vehiclePackage = descriptor.vehicle as grpc.GrpcObject;
-    const vehicleService =
-        vehiclePackage.VehicleService as grpc.ServiceClientConstructor;
+  const descriptor = grpc.loadPackageDefinition(definition);
+  const vehiclePackage = descriptor.vehicle as grpc.GrpcObject;
+  const vehicleService =
+    vehiclePackage.VehicleService as grpc.ServiceClientConstructor;
 
-    await testConnection();
+  await testConnection();
 
-    const server = new grpc.Server();
+  iniciarWorkerPolicial().catch((error) =>
+    console.error("[VehicleService] Error al iniciar Worker Policial:", error),
+  );
+  escucharResultadosVerificacion().catch((error) =>
+    console.error(
+      "[VehicleService] Error al iniciar Consumidor de Resultados:",
+      error,
+    ),
+  );
 
-    server.addService(vehicleService.service, handlers);
+  const server = new grpc.Server();
 
-    const boundPort = await new Promise<number>((resolve, reject) => {
-        server.bindAsync(
-            `${host}:${port}`,
-            grpc.ServerCredentials.createInsecure(),
-            (error, actualPort) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
+  server.addService(vehicleService.service, handlers);
 
-                resolve(actualPort);
-            },
-        );
-    });
+  const boundPort = await new Promise<number>((resolve, reject) => {
+    server.bindAsync(
+      `${host}:${port}`,
+      grpc.ServerCredentials.createInsecure(),
+      (error, actualPort) => {
+        if (error) {
+          reject(error);
+          return;
+        }
 
-    console.log(
-        `[VehicleService] Servidor gRPC escuchando en ${host}:${boundPort}`,
+        resolve(actualPort);
+      },
     );
+  });
 
-    let cerrando = false;
+  console.log(
+    `[VehicleService] Servidor gRPC escuchando en ${host}:${boundPort}`,
+  );
 
-    const cerrar = (): void => {
-        if (cerrando) return;
-        cerrando = true;
+  let cerrando = false;
 
-        console.log("[VehicleService] Cerrando servidor...");
+  const cerrar = (): void => {
+    if (cerrando) return;
+    cerrando = true;
 
-        const timeout = setTimeout(() => {
-            server.forceShutdown();
-        }, 5000);
+    console.log("[VehicleService] Cerrando servidor...");
 
-        server.tryShutdown(() => {
-            clearTimeout(timeout);
+    const timeout = setTimeout(() => {
+      server.forceShutdown();
+    }, 5000);
 
-            void pool.end().catch((error: unknown) => {
-                console.error("[VehicleService] Error al cerrar MySQL:", error);
-                process.exitCode = 1;
-            });
-        });
-    };
+    server.tryShutdown(() => {
+      clearTimeout(timeout);
 
-    process.once("SIGINT", cerrar);
-    process.once("SIGTERM", cerrar);
+      void pool.end().catch((error: unknown) => {
+        console.error("[VehicleService] Error al cerrar MySQL:", error);
+        process.exitCode = 1;
+      });
+    });
+  };
+
+  process.once("SIGINT", cerrar);
+  process.once("SIGTERM", cerrar);
 }
 
 void main().catch(async (error: unknown) => {
-    console.error("[VehicleService] No se pudo iniciar:", error);
-    process.exitCode = 1;
-    await pool.end();
+  console.error("[VehicleService] No se pudo iniciar:", error);
+  process.exitCode = 1;
+  await pool.end();
 });
