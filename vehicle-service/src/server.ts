@@ -5,6 +5,12 @@ import { pool, testConnection } from "./db";
 import { handlers } from "./handlers";
 import { iniciarWorkerPolicial } from "./policialWorker";
 import { escucharResultadosVerificacion } from "./verificacionConsumer";
+import { inicializarTablasExternos } from "./externos/schema";
+import { iniciarPublicadorExternos } from "./externos/publisher";
+import { iniciarWorkerTitularidad } from "./externos/titularidadWorker";
+import { iniciarCoordinadorExternos } from "./externos/coordinadorWorker";
+import { iniciarWorkerIncorporacion } from "./externos/incorporacionWorker";
+
 
 const PROTO_PATH = path.resolve(__dirname, "../proto/vehicle.proto");
 
@@ -30,6 +36,53 @@ async function main(): Promise<void> {
     vehiclePackage.VehicleService as grpc.ServiceClientConstructor;
 
   await testConnection();
+  await inicializarTablasExternos();
+  console.log("[VehicleService] Tablas de vehículos externos listas");
+
+    const detenerPublicadorExternos = iniciarPublicadorExternos();
+
+    async function conectarWorkerTitularidad(): Promise<void> {
+        const maxIntentos = 10;
+
+        for (let intento = 1; intento <= maxIntentos; intento++) {
+            try {
+                await iniciarWorkerTitularidad();
+                return;
+            } catch (error) {
+                console.error(
+                    `[Titularidad] Intento ${intento}/${maxIntentos} fallido:`,
+                    error instanceof Error ? error.message : error,
+                );
+
+                if (intento === maxIntentos) {
+                    throw error;
+                }
+
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+        }
+    }
+
+    void conectarWorkerTitularidad().catch((error: unknown) => {
+        console.error(
+            "[VehicleService] Se agotaron los intentos de inicio de titularidad:",
+            error,
+        );
+    });
+
+    void iniciarCoordinadorExternos().catch((error: unknown) => {
+        console.error(
+            "[VehicleService] No se pudo iniciar el coordinador:",
+            error,
+        );
+    });
+
+    void iniciarWorkerIncorporacion().catch((error: unknown) => {
+        console.error(
+            "[VehicleService] No se pudo iniciar el worker de incorporación:",
+            error,
+        );
+    });
 
   iniciarWorkerPolicial().catch((error) =>
     console.error("[VehicleService] Error al iniciar Worker Policial:", error),
@@ -79,7 +132,9 @@ async function main(): Promise<void> {
     server.tryShutdown(() => {
       clearTimeout(timeout);
 
-      void pool.end().catch((error: unknown) => {
+        void detenerPublicadorExternos()
+            .then(() => pool.end())
+            .catch((error: unknown) => {
         console.error("[VehicleService] Error al cerrar MySQL:", error);
         process.exitCode = 1;
       });
