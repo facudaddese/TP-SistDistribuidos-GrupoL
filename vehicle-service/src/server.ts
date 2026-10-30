@@ -11,6 +11,9 @@ import { iniciarWorkerTitularidad } from "./externos/titularidadWorker";
 import { iniciarCoordinadorExternos } from "./externos/coordinadorWorker";
 import { iniciarWorkerIncorporacion } from "./externos/incorporacionWorker";
 
+// Participante 4: Mantenimiento Preventivo
+import { iniciarWorkerMantenimiento } from "./mantenimientoWorker.js";
+import { escucharResultadosMantenimiento } from "./mantenimientoConsumer.js";
 
 const PROTO_PATH = path.resolve(__dirname, "../proto/vehicle.proto");
 
@@ -39,57 +42,69 @@ async function main(): Promise<void> {
   await inicializarTablasExternos();
   console.log("[VehicleService] Tablas de vehículos externos listas");
 
-    const detenerPublicadorExternos = iniciarPublicadorExternos();
+  const detenerPublicadorExternos = iniciarPublicadorExternos();
 
-    async function conectarWorkerTitularidad(): Promise<void> {
-        const maxIntentos = 10;
+  async function conectarWorkerTitularidad(): Promise<void> {
+    const maxIntentos = 10;
 
-        for (let intento = 1; intento <= maxIntentos; intento++) {
-            try {
-                await iniciarWorkerTitularidad();
-                return;
-            } catch (error) {
-                console.error(
-                    `[Titularidad] Intento ${intento}/${maxIntentos} fallido:`,
-                    error instanceof Error ? error.message : error,
-                );
+    for (let intento = 1; intento <= maxIntentos; intento++) {
+      try {
+        await iniciarWorkerTitularidad();
+        return;
+      } catch (error) {
+        console.error(
+          `[Titularidad] Intento ${intento}/${maxIntentos} fallido:`,
+          error instanceof Error ? error.message : error,
+        );
 
-                if (intento === maxIntentos) {
-                    throw error;
-                }
-
-                await new Promise((resolve) => setTimeout(resolve, 3000));
-            }
+        if (intento === maxIntentos) {
+          throw error;
         }
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
     }
+  }
 
-    void conectarWorkerTitularidad().catch((error: unknown) => {
-        console.error(
-            "[VehicleService] Se agotaron los intentos de inicio de titularidad:",
-            error,
-        );
-    });
+  void conectarWorkerTitularidad().catch((error: unknown) => {
+    console.error(
+      "[VehicleService] Se agotaron los intentos de inicio de titularidad:",
+      error,
+    );
+  });
 
-    void iniciarCoordinadorExternos().catch((error: unknown) => {
-        console.error(
-            "[VehicleService] No se pudo iniciar el coordinador:",
-            error,
-        );
-    });
+  void iniciarCoordinadorExternos().catch((error: unknown) => {
+    console.error("[VehicleService] No se pudo iniciar el coordinador:", error);
+  });
 
-    void iniciarWorkerIncorporacion().catch((error: unknown) => {
-        console.error(
-            "[VehicleService] No se pudo iniciar el worker de incorporación:",
-            error,
-        );
-    });
+  void iniciarWorkerIncorporacion().catch((error: unknown) => {
+    console.error(
+      "[VehicleService] No se pudo iniciar el worker de incorporación:",
+      error,
+    );
+  });
 
+  // Participante 2: Verificación Policial
   iniciarWorkerPolicial().catch((error) =>
     console.error("[VehicleService] Error al iniciar Worker Policial:", error),
   );
   escucharResultadosVerificacion().catch((error) =>
     console.error(
       "[VehicleService] Error al iniciar Consumidor de Resultados:",
+      error,
+    ),
+  );
+
+  // Participante 4: Mantenimiento Preventivo
+  iniciarWorkerMantenimiento().catch((error) =>
+    console.error(
+      "[VehicleService] Error al iniciar Worker de Mantenimiento:",
+      error,
+    ),
+  );
+  escucharResultadosMantenimiento().catch((error) =>
+    console.error(
+      "[VehicleService] Error al iniciar Consumidor de Resultados de Mantenimiento:",
       error,
     ),
   );
@@ -132,12 +147,12 @@ async function main(): Promise<void> {
     server.tryShutdown(() => {
       clearTimeout(timeout);
 
-        void detenerPublicadorExternos()
-            .then(() => pool.end())
-            .catch((error: unknown) => {
-        console.error("[VehicleService] Error al cerrar MySQL:", error);
-        process.exitCode = 1;
-      });
+      void detenerPublicadorExternos()
+        .then(() => pool.end())
+        .catch((error: unknown) => {
+          console.error("[VehicleService] Error al cerrar MySQL:", error);
+          process.exitCode = 1;
+        });
     });
   };
 
