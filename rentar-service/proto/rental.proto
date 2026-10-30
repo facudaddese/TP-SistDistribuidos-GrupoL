@@ -7,6 +7,7 @@ service RentalService {
   rpc ConsultarReservas (ConsultarReservasRequest) returns (ListaReservasResponse);
   rpc CancelarReserva (CancelarReservaRequest) returns (ReservaResponse);
   rpc ConsultarHistorial (ConsultarHistorialRequest) returns (ListaReservasResponse);
+  rpc ConsultarVehiculosOcupados (ConsultarVehiculosOcupadosRequest) returns (VehiculosOcupadosResponse);
 }
 
 message CrearReservaRequest {
@@ -44,3 +45,12 @@ message ReservaResponse {
 message ListaReservasResponse {
   repeated ReservaResponse reservas = 1;
 }
+
+message ConsultarVehiculosOcupadosRequest {
+  string fechaInicio = 1;
+  string fechaFin = 2;
+}
+
+message VehiculosOcupadosResponse {
+  repeated int32 vehiculoIds = 1;
+}

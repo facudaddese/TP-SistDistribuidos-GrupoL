@@ -7,6 +7,14 @@ service CustomerService {
   rpc ConsultarCliente (ConsultarClienteRequest) returns (ClienteResponse);
   rpc VerificarExistencia (VerificarClienteRequest) returns (ExistenciaResponse);
   rpc VerificarActivo (VerificarClienteRequest) returns (ActivoResponse);
+  rpc ConsultarClientePorDocumento (ConsultarClientePorDocumentoRequest) returns (ClienteResponse);
+  rpc CrearCliente (CrearClienteRequest) returns (ClienteResponse);
+  rpc ModificarCliente (ModificarClienteRequest) returns (ClienteResponse);
+  rpc DarDeBajaCliente (DarDeBajaClienteRequest) returns (ClienteResponse);
+}
+
+message ConsultarClientePorDocumentoRequest {
+  string documento = 1;
 }
 
 message ConsultarClientesRequest {
@@ -43,4 +51,28 @@ message ExistenciaResponse {
 message ActivoResponse {
   bool existe = 1;
   bool activo = 2;
+}
+
+message CrearClienteRequest {
+  string documento = 1;
+  string nombre = 2;
+  string apellido = 3;
+  string email = 4;
+  string password = 5;
+  string telefono = 6;
+  string fechaNacimiento = 7;
+}
+
+message ModificarClienteRequest {
+  int32 id = 1;
+  string documento = 2;
+  string nombre = 3;
+  string apellido = 4;
+  string email = 5;
+  string telefono = 6;
+  string fechaNacimiento = 7;
+}
+
+message DarDeBajaClienteRequest {
+  int32 id = 1;
 }

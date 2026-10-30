@@ -10,7 +10,7 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROTO_PATH = path.resolve(__dirname, '../customer.proto');
+const PROTO_PATH = path.resolve(__dirname, '../proto/customer.proto');
 
 const PORT = process.env.GRPC_PORT || '50051';
 
