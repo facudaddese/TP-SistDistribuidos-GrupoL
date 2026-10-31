@@ -80,6 +80,8 @@ public class ReservaGrpcMapper {
                 .precioDiarioAplicado(precioDiarioAplicado)
                 .importeTotal(importeTotal)
                 .estado(estado)
+                // TODO: Rental Service almacena las reservas en memoria y no persiste el dato de fechaCreacion.
+                // Cada consulta muestra la hora actual porque el servicio Rental no provee este dato.
                 .fechaCreacion(LocalDateTime.now())
                 .build();
     }

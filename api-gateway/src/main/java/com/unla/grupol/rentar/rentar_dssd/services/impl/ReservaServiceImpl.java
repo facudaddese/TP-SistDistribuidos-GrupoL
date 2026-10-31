@@ -216,6 +216,9 @@ public class ReservaServiceImpl implements ReservaService {
         );
 
         // 3. Devolver vehículo a estado DISPONIBLE
+        // Nota: Pasar el vehículo a DISPONIBLE al cancelar es una mejora respecto del Hito 1
+        // (donde quedaba en RESERVADO). Actualmente no verifica si existen otras reservas
+        // confirmadas para este mismo vehículo en períodos solapados o contiguos.
         try {
             grpcClientManager.getVehicleStub().actualizarEstado(
                     ActualizarEstadoRequest.newBuilder()
