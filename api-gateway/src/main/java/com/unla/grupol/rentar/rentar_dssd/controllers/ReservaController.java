@@ -32,7 +32,14 @@ public class ReservaController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ReservaResponseDTO>> obtenerTodas() {
+    public ResponseEntity<List<ReservaResponseDTO>> obtenerTodas(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long clienteId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long vehiculoId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String estado
+    ) {
+        if (clienteId != null || vehiculoId != null || (estado != null && !estado.isBlank())) {
+            return ResponseEntity.ok(reservaService.obtenerConFiltros(clienteId, vehiculoId, estado));
+        }
         return ResponseEntity.ok(reservaService.obtenerTodas());
     }
 

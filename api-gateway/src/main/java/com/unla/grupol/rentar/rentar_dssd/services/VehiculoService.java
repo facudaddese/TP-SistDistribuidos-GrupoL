@@ -12,4 +12,6 @@ public interface VehiculoService {
     void deleteVehiculo(Long id);
     VehiculoResponseDTO getVehiculoById(Long id);
     List<VehiculoResponseDTO> getAllVehiculos();
+    List<VehiculoResponseDTO> getAllVehiculos(boolean soloActivos);
+    List<VehiculoResponseDTO> buscarDisponibles(String tipoVehiculo, String marca, String modelo, String precioMin, String precioMax, List<Long> idsExcluidos);
 }
