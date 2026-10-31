@@ -8,14 +8,15 @@ export interface ReservaRequest {
 }
 
 export interface ReservaResponse {
-  id: number;
-  cliente: { id: number; nombre: string; apellido: string };
-  vehiculo: { id: number; patente: string; marca: string; modelo: string };
-  fechaHoraInicio: string;
-  fechaHoraFin: string;
-  precioDiarioAplicado: number;
-  importeTotal: number;
-  estado: EstadoReserva;
+    id: number;
+    clienteId: number;
+    vehiculoId: number;
+    fechaHoraInicio: string;
+    fechaHoraFin: string;
+    precioDiarioAplicado: number;
+    importeTotal: number;
+    estado: EstadoReserva;
+    fechaCreacion?: string | null;
 }
 
 
