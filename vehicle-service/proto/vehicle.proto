@@ -35,6 +35,19 @@ service VehicleService {
   // Busca vehículos disponibles según filtros opcionales y excluyendo IDs.
   rpc BuscarVehiculosDisponibles (BuscarVehiculosDisponiblesRequest)
       returns (ListaVehiculosResponse);
+
+
+// Registra una solicitud de incorporación para validar por eventos.
+    rpc CrearSolicitudExterna (CrearSolicitudExternaRequest)
+    returns (SolicitudExternaResponse);
+
+// Consulta el progreso de una solicitud.
+    rpc ConsultarSolicitudExterna (ConsultarSolicitudExternaRequest)
+    returns (SolicitudExternaResponse);
+
+// Lista las solicitudes de un cliente.
+    rpc ConsultarSolicitudesExternasPorCliente (SolicitudesExternasClienteRequest)
+    returns (ListaSolicitudesExternasResponse);
 }
 
 message ConsultarVehiculosRequest {
@@ -100,4 +113,53 @@ message VehiculoResponse {
 
 message ListaVehiculosResponse {
   repeated VehiculoResponse vehiculos = 1;
+}
+
+message CrearSolicitudExternaRequest {
+  int64 clienteId = 1;
+  string documento = 2;
+  string patente = 3;
+  string marca = 4;
+  string modelo = 5;
+  int32 anio = 6;
+  string color = 7;
+  string tipoVehiculo = 8;
+  string precioDiario = 9;
+}
+
+message ConsultarSolicitudExternaRequest {
+  int64 vehiculoExternoId = 1;
+
+  // Permite verificar que la solicitud pertenece al cliente.
+  int64 clienteId = 2;
+}
+
+message SolicitudesExternasClienteRequest {
+  int64 clienteId = 1;
+}
+
+message SolicitudExternaResponse {
+  int64 vehiculoExternoId = 1;
+  int64 clienteId = 2;
+  string patente = 3;
+  string marca = 4;
+  string modelo = 5;
+  int32 anio = 6;
+  string color = 7;
+  string tipoVehiculo = 8;
+  string precioDiario = 9;
+
+  // PENDIENTE, APROBADA, RECHAZADA o INCORPORADA.
+  string estado = 10;
+
+  // Ausente mientras no se haya recibido la validación.
+  optional string resultadoPatente = 11;
+  optional string resultadoTitularidad = 12;
+
+  // Presente después del alta definitiva.
+  optional int64 vehiculoId = 13;
+}
+
+message ListaSolicitudesExternasResponse {
+  repeated SolicitudExternaResponse solicitudes = 1;
 }

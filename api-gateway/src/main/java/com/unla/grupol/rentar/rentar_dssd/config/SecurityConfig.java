@@ -72,6 +72,12 @@ public class SecurityConfig {
                     "/favicon.ico"
                 ).permitAll()
 
+                    // Incorporación de vehículos externos: exclusivo CLIENTE.
+                    .requestMatchers(
+                            "/api/vehiculos-externos",
+                            "/api/vehiculos-externos/**"
+                    ).hasRole("CLIENTE")
+
                 // Flota de vehículos: lectura pública (catálogo para clientes y visitantes)
                 .requestMatchers(HttpMethod.GET, "/api/vehiculos/**").permitAll()
                 // Modificaciones de vehículos: exclusivo ADMINISTRADOR

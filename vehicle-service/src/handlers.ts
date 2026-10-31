@@ -11,6 +11,11 @@ import type {
   BuscarVehiculosDisponiblesRequest,
 } from "./types";
 import { publicarSolicitudVerificacion } from "./verificacionPublisher";
+import * as externosRepository from "./externos/repository";
+import type {
+    CrearSolicitudExterna,
+    SolicitudExterna,
+} from "./externos/types";
 
 class ErrorValidacion extends Error {}
 
@@ -460,12 +465,219 @@ const buscarVehiculosDisponibles: grpc.handleUnaryCall<
   }
 };
 
+interface ConsultarSolicitudExternaRequest {
+    vehiculoExternoId: string;
+    clienteId: string;
+}
+
+interface SolicitudesExternasClienteRequest {
+    clienteId: string;
+}
+
+// Los campos opcionales se omiten mientras no tienen resultado.
+// No enviamos el documento en la respuesta.
+type SolicitudExternaGrpcResponse = Omit<
+    SolicitudExterna,
+    "documento" | "resultadoPatente" | "resultadoTitularidad" | "vehiculoId"
+> & {
+    resultadoPatente?: string;
+    resultadoTitularidad?: string;
+    vehiculoId?: string;
+};
+
+function convertirSolicitudGrpc(
+    solicitud: SolicitudExterna,
+): SolicitudExternaGrpcResponse {
+    return {
+        vehiculoExternoId: solicitud.vehiculoExternoId,
+        clienteId: solicitud.clienteId,
+        patente: solicitud.patente,
+        marca: solicitud.marca,
+        modelo: solicitud.modelo,
+        anio: solicitud.anio,
+        color: solicitud.color,
+        tipoVehiculo: solicitud.tipoVehiculo,
+        precioDiario: solicitud.precioDiario,
+        estado: solicitud.estado,
+        ...(solicitud.resultadoPatente !== null
+            ? { resultadoPatente: solicitud.resultadoPatente }
+            : {}),
+        ...(solicitud.resultadoTitularidad !== null
+            ? { resultadoTitularidad: solicitud.resultadoTitularidad }
+            : {}),
+        ...(solicitud.vehiculoId !== null
+            ? { vehiculoId: solicitud.vehiculoId }
+            : {}),
+    };
+}
+
+const crearSolicitudExterna: grpc.handleUnaryCall<
+    CrearSolicitudExterna,
+    SolicitudExternaGrpcResponse
+> = async (call, callback) => {
+    try {
+        const entrada = call.request;
+
+        const datos: CrearSolicitudExterna = {
+            clienteId: entrada.clienteId ?? "",
+            documento: (entrada.documento ?? "").replace(/[.\s-]/g, ""),
+            patente: (entrada.patente ?? "").trim().toUpperCase(),
+            marca: (entrada.marca ?? "").trim(),
+            modelo: (entrada.modelo ?? "").trim(),
+            anio: entrada.anio,
+            color: (entrada.color ?? "").trim(),
+            tipoVehiculo: (entrada.tipoVehiculo ?? "").trim(),
+            precioDiario: (entrada.precioDiario ?? "").trim(),
+        };
+
+        if (!validarId(datos.clienteId)) {
+            callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: "El ID del cliente debe ser un entero positivo válido",
+            });
+            return;
+        }
+
+        if (!datos.documento || datos.documento.length > 20) {
+            callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: "El documento es obligatorio y admite hasta 20 caracteres",
+            });
+            return;
+        }
+
+        const errorValidacion = validarNuevoVehiculo(datos);
+
+        if (errorValidacion) {
+            callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: errorValidacion,
+            });
+            return;
+        }
+
+        const solicitud =
+            await externosRepository.crearSolicitudExterna(datos);
+
+        callback(null, convertirSolicitudGrpc(solicitud));
+    } catch (error) {
+        if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            error.code === "ER_DUP_ENTRY"
+        ) {
+            callback({
+                code: grpc.status.ALREADY_EXISTS,
+                message: "Ya existe una solicitud para esa patente",
+            });
+            return;
+        }
+
+        console.error(
+            "[VehicleService] Error al crear solicitud externa:",
+            error,
+        );
+
+        callback({
+            code: grpc.status.INTERNAL,
+            message: "Error interno al crear la solicitud externa",
+        });
+    }
+};
+
+const consultarSolicitudExterna: grpc.handleUnaryCall<
+    ConsultarSolicitudExternaRequest,
+    SolicitudExternaGrpcResponse
+> = async (call, callback) => {
+    try {
+        const { vehiculoExternoId, clienteId } = call.request;
+
+        if (
+            !validarId(vehiculoExternoId ?? "") ||
+            !validarId(clienteId ?? "")
+        ) {
+            callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: "Los IDs deben ser enteros positivos válidos",
+            });
+            return;
+        }
+
+        const solicitud =
+            await externosRepository.consultarSolicitudExterna(
+                vehiculoExternoId,
+            );
+
+        // No revelamos solicitudes pertenecientes a otro cliente.
+        if (!solicitud || solicitud.clienteId !== clienteId) {
+            callback({
+                code: grpc.status.NOT_FOUND,
+                message: "Solicitud no encontrada",
+            });
+            return;
+        }
+
+        callback(null, convertirSolicitudGrpc(solicitud));
+    } catch (error) {
+        console.error(
+            "[VehicleService] Error al consultar solicitud externa:",
+            error,
+        );
+
+        callback({
+            code: grpc.status.INTERNAL,
+            message: "Error interno al consultar la solicitud externa",
+        });
+    }
+};
+
+const consultarSolicitudesExternasPorCliente: grpc.handleUnaryCall<
+    SolicitudesExternasClienteRequest,
+    { solicitudes: SolicitudExternaGrpcResponse[] }
+> = async (call, callback) => {
+    try {
+        const { clienteId } = call.request;
+
+        if (!validarId(clienteId ?? "")) {
+            callback({
+                code: grpc.status.INVALID_ARGUMENT,
+                message: "El ID del cliente debe ser un entero positivo válido",
+            });
+            return;
+        }
+
+        const solicitudes =
+            await externosRepository.consultarSolicitudesPorCliente(clienteId);
+
+        callback(null, {
+            solicitudes: solicitudes.map(convertirSolicitudGrpc),
+        });
+    } catch (error) {
+        console.error(
+            "[VehicleService] Error al listar solicitudes externas:",
+            error,
+        );
+
+        callback({
+            code: grpc.status.INTERNAL,
+            message: "Error interno al listar solicitudes externas",
+        });
+    }
+};
+
+
 export const handlers = {
-  ConsultarVehiculos: consultarVehiculos,
-  ConsultarVehiculo: consultarVehiculo,
-  CrearVehiculo: crearVehiculo,
-  ModificarVehiculo: modificarVehiculo,
-  DarDeBajaVehiculo: darDeBajaVehiculo,
-  ActualizarEstado: actualizarEstado,
-  BuscarVehiculosDisponibles: buscarVehiculosDisponibles,
+    ConsultarVehiculos: consultarVehiculos,
+    ConsultarVehiculo: consultarVehiculo,
+    CrearVehiculo: crearVehiculo,
+    ModificarVehiculo: modificarVehiculo,
+    DarDeBajaVehiculo: darDeBajaVehiculo,
+    ActualizarEstado: actualizarEstado,
+    BuscarVehiculosDisponibles: buscarVehiculosDisponibles,
+
+    CrearSolicitudExterna: crearSolicitudExterna,
+    ConsultarSolicitudExterna: consultarSolicitudExterna,
+    ConsultarSolicitudesExternasPorCliente:
+    consultarSolicitudesExternasPorCliente,
 };

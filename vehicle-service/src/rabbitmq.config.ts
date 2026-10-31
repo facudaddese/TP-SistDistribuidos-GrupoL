@@ -157,9 +157,27 @@ export class RabbitMQClient {
                     } catch (err) {
                         console.error(
                             `[RabbitMQ] Error procesando mensaje de cola '${queueName}':`,
-                            err
+                            err,
                         );
-                        nack(false); // Descartar o mandar a Dead Letter Queue ante payload inválido
+
+                        // Si el canal se cerró, RabbitMQ reencolará los mensajes
+                        // que quedaron sin confirmar.
+                        if (this.channel !== channel) {
+                            return;
+                        }
+
+                        // Un JSON inválido no se soluciona reintentando.
+                        if (err instanceof SyntaxError) {
+                            channel.nack(msg, false, false);
+                            return;
+                        }
+
+                        // Esperamos antes de reintentar un error de procesamiento.
+                        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                        if (this.channel === channel) {
+                            channel.nack(msg, false, true);
+                        }
                     }
                 },
                 { noAck: false } // Acknowledgment manual obligatorio
