@@ -4,6 +4,8 @@ const TITULARES: Record<string, string> = {
     AB123CD: "30111222",
     AC456EF: "32444555",
     AD789GH: "35666777",
+    AH321JK: "35123456",
+    AF999ZZ: "35123456",
 };
 
 export function verificarTitularidad(

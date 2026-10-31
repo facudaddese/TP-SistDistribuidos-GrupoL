@@ -10,6 +10,7 @@ import { iniciarPublicadorExternos } from "./externos/publisher";
 import { iniciarWorkerTitularidad } from "./externos/titularidadWorker";
 import { iniciarCoordinadorExternos } from "./externos/coordinadorWorker";
 import { iniciarWorkerIncorporacion } from "./externos/incorporacionWorker";
+import { iniciarWorkerPatenteExternos } from "./externos/patenteWorker";
 
 // Participante 4: Mantenimiento Preventivo
 import { iniciarWorkerMantenimiento } from "./mantenimientoWorker.js";
@@ -76,6 +77,13 @@ async function main(): Promise<void> {
   void iniciarCoordinadorExternos().catch((error: unknown) => {
     console.error("[VehicleService] No se pudo iniciar el coordinador:", error);
   });
+
+    void iniciarWorkerPatenteExternos().catch((error: unknown) => {
+        console.error(
+            "[VehicleService] No se pudo iniciar el worker policial de externos:",
+            error,
+        );
+    });
 
   void iniciarWorkerIncorporacion().catch((error: unknown) => {
     console.error(
