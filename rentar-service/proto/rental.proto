@@ -2,55 +2,268 @@ syntax = "proto3";
 
 package rental;
 
+// ============================================================================
+// Rental Service - Contrato gRPC
+// ============================================================================
+// Responsabilidad del servicio:
+//   Gestionar el ciclo de vida de las reservas de vehículos: creación, consulta,
+//   cancelación, detección de conflictos y superposiciones temporales de flota,
+//   y provisión del historial de reservas por cliente.
+//
+// Dominio que posee:
+//   Entidad Reserva (id, clienteId, vehiculoId, fechaHoraInicio, fechaHoraFin,
+//   importeTotal, estado).
+//
+// Almacenamiento en memoria (importante):
+//   Las reservas se almacenan EXCLUSIVAMENTE en memoria volátil del proceso
+//   Node.js del servicio. NO cuenta con base de datos relacional persistente.
+//   Si el contenedor o servicio se reinicia, todos los registros de reservas
+//   se pierden y el contador de IDs secuenciales vuelve a 1.
+//
+// Lo que NO hace (límites de responsabilidad):
+//   - NO calcula el importe total de la reserva (importeTotal): la tarifa y el
+//     cálculo por días de alquiler son calculados previamente por el llamador
+//     (API Gateway) y recibidos listos para almacenar.
+//   - NO valida la existencia física ni el estado de clientes o vehículos en
+//     sus respectivas bases de datos: esa validación y orquestación corresponde
+//     al API Gateway.
+//   - NO modifica el estado operativo en Vehicle Service (el Gateway coordina
+//     dicha actualización tras confirmar o cancelar).
+//   - NO expone endpoints públicos a internet: es consumido EXCLUSIVAMENTE por
+//     el API Gateway a través de la red interna.
+//
+// Infraestructura y red:
+//   - Puerto por defecto: 50053 (TCP / gRPC).
+//   - Protocolo: HTTP/2 con Protocol Buffers v3.
+//   - Acceso: Red interna / Docker network. Tráfico privado no accesible
+//     directamente por navegadores ni clientes externos.
+// ============================================================================
 service RentalService {
+  // CrearReserva
+  // Finalidad:
+  //   Registra una nueva reserva para un vehículo específico en un intervalo temporal dado.
+  // Parámetros:
+  //   CrearReservaRequest (clienteId, vehiculoId, fechaHoraInicio, fechaHoraFin, importeTotal).
+  // Devuelve:
+  //   ReservaResponse con la reserva creada en estado "CONFIRMADA" y su ID asignado.
+  // Reglas de negocio:
+  //   - Fechas en formato ISO-8601 (ej. "2026-11-01T10:00:00Z"). Si no traen zona horaria,
+  //     por convención se normalizan interpretándose en UTC agregando 'Z'.
+  //   - fechaHoraFin debe ser estrictamente posterior a fechaHoraInicio.
+  //   - Regla estricta de superposición temporal:
+  //     Dos períodos se superponen si y solo si (inicioA < finB && finA > inicioB).
+  //     * Períodos contiguos (ej. finA == inicioB o inicioA == finB) NO se superponen.
+  //     * Solo bloquean las reservas en estado "CONFIRMADA". Las reservas en estado
+  //       "CANCELADA" se omiten y no bloquean disponibilidad.
+  //     * Si el vehículo ya tiene una reserva confirmada superpuesta, se rechaza.
+  //   - importeTotal: lo provee el llamador ya calculado; Rental Service lo persiste tal cual.
+  //   - Toda nueva reserva nace con estado "CONFIRMADA".
+  // Códigos gRPC:
+  //   - OK (0): Reserva creada exitosamente.
+  //   - INVALID_ARGUMENT (3): Fechas ISO-8601 inválidas o fechaHoraFin <= fechaHoraInicio.
+  //   - FAILED_PRECONDITION (9): El vehículo no está disponible por superposición de fechas
+  //     con otra reserva confirmada preexistente.
+  //   - INTERNAL (13): Error interno del servidor al procesar la reserva.
   rpc CrearReserva (CrearReservaRequest) returns (ReservaResponse);
+
+  // ConsultarReservas
+  // Finalidad:
+  //   Consulta las reservas registradas permitiendo filtrar por cliente, vehículo y/o estado.
+  // Parámetros:
+  //   ConsultarReservasRequest (clienteId, vehiculoId, estado).
+  // Devuelve:
+  //   ListaReservasResponse con las reservas que coinciden con los filtros aplicados.
+  // Reglas de negocio:
+  //   - Filtros combinables:
+  //     * clienteId: si es distinto de 0, filtra por ese cliente; si es 0 (default proto3), sin filtro.
+  //     * vehiculoId: si es distinto de 0, filtra por ese vehículo; si es 0 (default proto3), sin filtro.
+  //     * estado: si no es vacío, filtra por estado exacto ("CONFIRMADA", "CANCELADA");
+  //       si es "" (default proto3), sin filtro.
+  // Códigos gRPC:
+  //   - OK (0): Consulta completada con éxito (la lista puede ser vacía si no hay coincidencias).
+  //   - INTERNAL (13): Error interno del servidor al consultar reservas.
   rpc ConsultarReservas (ConsultarReservasRequest) returns (ListaReservasResponse);
+
+  // CancelarReserva
+  // Finalidad:
+  //   Cancela una reserva existente cambiando su estado a CANCELADA.
+  // Parámetros:
+  //   CancelarReservaRequest (campo "id").
+  // Devuelve:
+  //   ReservaResponse con los datos de la reserva y estado = "CANCELADA".
+  // Reglas de negocio:
+  //   - El ID debe corresponder a una reserva existente en la memoria del servicio.
+  //   - Cambia el estado a "CANCELADA". Al cancelarse, la reserva deja de bloquear
+  //     el vehículo en el período involucrado.
+  // Códigos gRPC:
+  //   - OK (0): Reserva cancelada con éxito.
+  //   - NOT_FOUND (5): Si no existe ninguna reserva con el ID especificado.
+  //   - INTERNAL (13): Error interno del servidor al cancelar la reserva.
   rpc CancelarReserva (CancelarReservaRequest) returns (ReservaResponse);
+
+  // ConsultarHistorial
+  // Finalidad:
+  //   Obtiene la lista completa de reservas (historial) pertenecientes a un cliente.
+  // Parámetros:
+  //   ConsultarHistorialRequest (campo "clienteId").
+  // Devuelve:
+  //   ListaReservasResponse con todas las reservas registradas para ese cliente.
+  // Reglas de negocio:
+  //   - Filtra exclusivamente por clienteId.
+  //   - Retorna todas las reservas del cliente sin importar su estado (tanto "CONFIRMADA"
+  //     como "CANCELADA").
+  // Códigos gRPC:
+  //   - OK (0): Historial devuelto satisfactoriamente (puede ser lista vacía si no tiene reservas).
+  //   - INTERNAL (13): Error interno del servidor al consultar el historial.
   rpc ConsultarHistorial (ConsultarHistorialRequest) returns (ListaReservasResponse);
+
+  // ConsultarVehiculosOcupados
+  // Finalidad:
+  //   Determina qué vehículos tienen reservas confirmadas superpuestas con un intervalo
+  //   de fechas determinado, para que el orquestador pueda excluirlos de la búsqueda.
+  // Parámetros:
+  //   ConsultarVehiculosOcupadosRequest (fechaInicio, fechaFin).
+  // Devuelve:
+  //   VehiculosOcupadosResponse con la lista de IDs de vehículos no disponibles.
+  // Reglas de negocio:
+  //   - fechaInicio y fechaFin deben ser cadenas ISO-8601 válidas (ej. "2026-11-01T10:00:00Z").
+  //   - fechaFin debe ser estrictamente posterior a fechaInicio.
+  //   - Solo toma en cuenta reservas en estado "CONFIRMADA". Las reservas "CANCELADA" no bloquean.
+  //   - Regla de superposición estricta: inicioA < finB && finA > inicioB.
+  //     Períodos contiguos no se superponen.
+  //   - Retorna un conjunto de IDs de vehículos únicos (sin duplicados).
+  //   - Consumido por el Gateway antes de llamar a VehicleService.BuscarVehiculosDisponibles
+  //     para enviar el listado en "idsExcluidos".
+  // Códigos gRPC:
+  //   - OK (0): Lista de IDs ocupados devuelta con éxito (puede ser vacía si hay disponibilidad total).
+  //   - INVALID_ARGUMENT (3): Fechas ISO-8601 inválidas o fechaFin <= fechaInicio.
+  //   - INTERNAL (13): Error interno del servidor al calcular vehículos ocupados.
   rpc ConsultarVehiculosOcupados (ConsultarVehiculosOcupadosRequest) returns (VehiculosOcupadosResponse);
 }
 
+// ----------------------------------------------------------------------------
+// Mensajes de Petición y Respuesta
+// ----------------------------------------------------------------------------
+
+// Petición para crear una nueva reserva.
 message CrearReservaRequest {
+  // Identificador único numérico del cliente que realiza la reserva.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 10.
   int32 clienteId = 1;
+
+  // Identificador único numérico del vehículo que se desea reservar.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 3.
   int32 vehiculoId = 2;
+
+  // Fecha y hora de inicio del alquiler en formato ISO-8601 UTC.
+  // Obligatorio. Formato: "YYYY-MM-DDTHH:mm:ss[.sss][Z|+-HH:mm]".
+  // Ejemplo: "2026-11-01T10:00:00Z".
   string fechaHoraInicio = 3;
+
+  // Fecha y hora de finalización del alquiler en formato ISO-8601 UTC.
+  // Obligatorio. Debe ser cronológicamente posterior a fechaHoraInicio.
+  // Ejemplo: "2026-11-05T18:00:00Z".
   string fechaHoraFin = 4;
+
+  // Monto total del alquiler en moneda del sistema.
+  // Obligatorio. Calculado previamente por el invocador (API Gateway) según la tarifa
+  // diaria del vehículo y la cantidad de días del período.
+  // Ejemplo: 125000.00.
   double importeTotal = 5;
 }
 
+// Petición para cancelar una reserva existente por su identificador.
 message CancelarReservaRequest {
+  // Identificador numérico de la reserva a cancelar.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 1.
   int32 id = 1;
 }
 
+// Petición para consultar reservas con filtros opcionales.
 message ConsultarReservasRequest {
+  // Filtro opcional por identificador de cliente.
+  // Valor por defecto proto3: 0, que significa "sin filtro por cliente".
+  // Ejemplo: 10.
   int32 clienteId = 1;
+
+  // Filtro opcional por identificador de vehículo.
+  // Valor por defecto proto3: 0, que significa "sin filtro por vehículo".
+  // Ejemplo: 3.
   int32 vehiculoId = 2;
+
+  // Filtro opcional por estado de la reserva.
+  // Valores permitidos: "CONFIRMADA", "CANCELADA".
+  // Valor por defecto proto3: "", que significa "sin filtro por estado" (retorna todos los estados).
+  // Ejemplo: "CONFIRMADA".
   string estado = 3;
 }
 
+// Petición para consultar el historial completo de reservas de un cliente.
 message ConsultarHistorialRequest {
+  // Identificador único numérico del cliente cuyo historial se solicita.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 10.
   int32 clienteId = 1;
 }
 
+// Representación de una reserva en el sistema de alquiler.
 message ReservaResponse {
+  // Identificador único asignado secuencialmente en memoria (1, 2, 3...).
+  // Ejemplo: 1.
   int32 id = 1;
+
+  // Identificador del cliente titular de la reserva.
+  // Ejemplo: 10.
   int32 clienteId = 2;
+
+  // Identificador del vehículo alquilado.
+  // Ejemplo: 3.
   int32 vehiculoId = 3;
+
+  // Fecha y hora de inicio de la reserva en formato ISO-8601 UTC.
+  // Ejemplo: "2026-11-01T10:00:00Z".
   string fechaHoraInicio = 4;
+
+  // Fecha y hora de finalización de la reserva en formato ISO-8601 UTC.
+  // Ejemplo: "2026-11-05T18:00:00Z".
   string fechaHoraFin = 5;
+
+  // Monto total del alquiler.
+  // Ejemplo: 125000.00.
   double importeTotal = 6;
+
+  // Estado operativo actual de la reserva en su ciclo de vida.
+  // Valores posibles: "CONFIRMADA" (reserva activa) o "CANCELADA" (reserva dada de baja).
+  // Ejemplo: "CONFIRMADA".
   string estado = 7;
 }
 
+// Colección de reservas retornada por consultas y búsquedas de historial.
 message ListaReservasResponse {
+  // Lista de reservas coincidentes. Puede ser vacía si no hay resultados.
   repeated ReservaResponse reservas = 1;
 }
 
+// Petición para consultar qué vehículos se encuentran ocupados en un período.
 message ConsultarVehiculosOcupadosRequest {
+  // Fecha y hora de inicio del intervalo a consultar en formato ISO-8601 UTC.
+  // Obligatorio. Formato: "YYYY-MM-DDTHH:mm:ss[.sss][Z|+-HH:mm]".
+  // Ejemplo: "2026-11-01T10:00:00Z".
   string fechaInicio = 1;
+
+  // Fecha y hora de finalización del intervalo a consultar en formato ISO-8601 UTC.
+  // Obligatorio. Debe ser estrictamente posterior a fechaInicio.
+  // Ejemplo: "2026-11-05T18:00:00Z".
   string fechaFin = 2;
 }
 
+// Colección de identificadores de vehículos ocupados en el intervalo temporal consultado.
 message VehiculosOcupadosResponse {
+  // Lista de IDs de vehículos que poseen al menos una reserva "CONFIRMADA" superpuesta.
+  // Si ningún vehículo está ocupado en el período, retorna una lista vacía.
+  // Ejemplo: [3, 7, 15].
   repeated int32 vehiculoIds = 1;
-}
+}
