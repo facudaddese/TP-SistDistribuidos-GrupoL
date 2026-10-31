@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 const Unauthorized = () => {
   const { rol } = useAuth();
 
-  const destino = rol === "ADMINISTRADOR" ? "/admin/vehiculos" : "/";
+  const destino = rol === "ADMINISTRADOR" ? "/admin/vehiculos" : "/reservar";
 
   return (
     <main className="flex items-center justify-center min-h-[70vh] px-4">
@@ -12,9 +12,12 @@ const Unauthorized = () => {
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-3xl font-bold">
           !
         </div>
-        <h2 className="text-2xl font-bold text-red-400 mb-2">Acceso Denegado</h2>
+        <h2 className="text-2xl font-bold text-red-400 mb-2">
+          Acceso Denegado
+        </h2>
         <p className="text-gray-300 text-sm mb-6">
-          No contás con los permisos necesarios para acceder a esta sección con tu rol actual ({rol || "SIN ROL"}).
+          No contás con los permisos necesarios para acceder a esta sección con
+          tu rol actual ({rol || "SIN ROL"}).
         </p>
         <Link
           to={destino}

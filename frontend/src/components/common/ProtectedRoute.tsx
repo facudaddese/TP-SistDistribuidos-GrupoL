@@ -24,8 +24,36 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && rol && !allowedRoles.includes(rol)) {
-    return <Navigate to="/unauthorized" replace />;
+  if (allowedRoles && allowedRoles.length > 0) {
+    const userRolNormalizado = (rol || "")
+      .toString()
+      .replace(/^ROLE_/, "")
+      .toUpperCase();
+
+    const tienePermiso = allowedRoles.some((r) => {
+      const allowedNormalizado = r
+        .toString()
+        .replace(/^ROLE_/, "")
+        .toUpperCase();
+
+      if (userRolNormalizado === allowedNormalizado) return true;
+      if (
+        allowedNormalizado === "ADMINISTRADOR" &&
+        userRolNormalizado === "ADMIN"
+      )
+        return true;
+      if (
+        allowedNormalizado === "ADMIN" &&
+        userRolNormalizado === "ADMINISTRADOR"
+      )
+        return true;
+
+      return false;
+    });
+
+    if (!tienePermiso) {
+      return <Navigate to="/unauthorized" replace />;
+    }
   }
 
   return <>{children}</>;
