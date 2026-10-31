@@ -1,83 +1,397 @@
+# ============================================================================
+# API Gateway - Esquema GraphQL para Consultas del Sistema Rentar
+# ============================================================================
+# Relación con la API REST:
+#   - La API REST del Gateway (/api/...) gestiona las operaciones mutacionales y
+#     transaccionales de escritura (altas, modificaciones, cancelaciones y flujos
+#     de autenticación).
+#   - El endpoint GraphQL (/graphql) centraliza exclusivamente las operaciones de
+#     lectura y consulta flexible con filtros combinados, permitiendo a los clientes
+#     solicitar únicamente los campos que necesitan sin incurrir en over-fetching.
+#
+# Resolución interna vía gRPC:
+#   - El API Gateway actúa como BFF (Backend for Frontend) y orquestador.
+#   - Ninguna consulta GraphQL accede directamente a bases de datos; todas se
+#     resuelven delegando en los microservicios internos mediante gRPC:
+#       * Customer Service (puerto 50051) para datos maestros de clientes.
+#       * Vehicle Service (puerto 50052) para catálogo y filtrado de flota.
+#       * Rental Service (puerto 50053) para reservas, conflictos y calendarios.
+#
+# Autenticación y Autorización:
+#   - Conforme a la configuración en SecurityConfig, las rutas /graphql y /graphiql
+#     poseen acceso público (permitAll()). No requieren token JWT ni cabeceras
+#     de autorización para ejecutar consultas.
+# ============================================================================
+
+"""
+Consultas raíz del sistema de alquiler de vehículos Rentar.
+Permite listar la flota activa, consultar disponibilidad temporal de vehículos,
+filtrar reservas con criterios acumulativos y consultar el historial de alquileres.
+Todas las consultas se resuelven a través del API Gateway consumiendo microservicios
+internos mediante llamadas gRPC.
+"""
 type Query {
+  """
+  Obtiene la lista completa de vehículos activos registrados en el catálogo.
+  Devuelve una lista vacía si no hay vehículos activos disponibles en el sistema.
+  Posibles errores:
+    - INTERNAL_ERROR: Si Vehicle Service no responde o falla la comunicación gRPC.
+  """
   obtenerTodosLosVehiculos: [VehiculoDisponible!]!
+
+  """
+  Busca y filtra vehículos activos y disponibles para alquiler en un intervalo temporal específico.
+  Regla de disponibilidad:
+    - Un vehículo se considera disponible si está activo y NO posee reservas en estado
+      CONFIRMADA que se superpongan con el período solicitado [fechaInicio, fechaFin].
+    - Regla estricta de superposición temporal: inicioA < finB && finA > inicioB.
+    - Los períodos contiguos (finA == inicioB o inicioA == finB) NO se superponen.
+    - Las reservas en estado CANCELADA o FINALIZADA no bloquean la disponibilidad.
+  Devuelve una lista vacía si ningún vehículo cumple los filtros o si todos están ocupados.
+  Posibles errores:
+    - BAD_REQUEST: Si fechaInicio o fechaFin no cumplen el formato ISO-8601, si fechaFin
+      es anterior o igual a fechaInicio, o si precioMin es mayor a precioMax.
+    - INTERNAL_ERROR: Si Rental Service o Vehicle Service no se encuentran disponibles.
+  """
   consultarDisponibilidad(
+    """
+    Filtro opcional por tipo o categoría de carrocería (SEDAN, SUV, PICKUP, COUPE, HATCHBACK).
+    Si se omite, no se restringe por tipo.
+    """
     tipo: TipoVehiculo
+
+    """
+    Filtro opcional por marca del fabricante. Búsqueda por coincidencia parcial insensible
+    a mayúsculas/minúsculas (case-insensitive substring, ej. 'toy' coincide con 'Toyota').
+    """
     marca: String
+
+    """
+    Filtro opcional por modelo comercial. Búsqueda por coincidencia parcial insensible
+    a mayúsculas/minúsculas (case-insensitive substring, ej. 'cor' coincide con 'Corolla').
+    """
     modelo: String
+
+    """
+    Cota inferior opcional para la tarifa diaria de alquiler (entero en moneda del sistema).
+    """
     precioMin: Int
+
+    """
+    Cota superior opcional para la tarifa diaria de alquiler (entero en moneda del sistema).
+    Si se envían precioMin y precioMax, precioMax debe ser mayor o igual a precioMin.
+    """
     precioMax: Int
+
+    """
+    Fecha y hora de inicio del alquiler requerida en formato ISO-8601 (ej. '2026-11-01T10:00:00'
+    o '2026-11-01T10:00:00Z').
+    """
     fechaInicio: String!
+
+    """
+    Fecha y hora de finalización del alquiler requerida en formato ISO-8601. Debe ser
+    estrictamente posterior a fechaInicio.
+    """
     fechaFin: String!
   ): [VehiculoDisponible!]!
+
+  """
+  Consulta reservas registradas aplicando filtros opcionales combinables (conjunción lógica AND).
+  Cada reserva devuelta se enriquece automáticamente con la información del cliente y del
+  vehículo asociado, consultando a Customer Service y Vehicle Service con caché por petición.
+  Los resultados se ordenan cronológicamente de forma descendente por fecha de inicio.
+  Devuelve una lista vacía si ninguna reserva coincide con los filtros especificados.
+  Posibles errores:
+    - BAD_REQUEST: Si el formato de fechaInicio o fechaFin es inválido, o fechaFin <= fechaInicio.
+    - INTERNAL_ERROR: Si Rental Service no responde o falla durante la consulta.
+  """
   consultarReservas(
+    """
+    Filtro opcional por identificador numérico de cliente en el sistema.
+    """
     clienteId: ID
+
+    """
+    Filtro opcional por identificador numérico de vehículo en el sistema.
+    """
     vehiculoId: ID
+
+    """
+    Filtro opcional por tipo o categoría de vehículo asociado a la reserva.
+    """
     tipo: TipoVehiculo
+
+    """
+    Filtro opcional por estado operativo de la reserva (CONFIRMADA, CANCELADA, FINALIZADA).
+    """
     estado: EstadoReserva
+
+    """
+    Filtro opcional de fecha inicial (ISO-8601). Excluye reservas cuyo fin sea anterior o
+    igual a este instante.
+    """
     fechaInicio: String
+
+    """
+    Filtro opcional de fecha final (ISO-8601). Excluye reservas cuyo inicio sea posterior o
+    igual a este instante.
+    """
     fechaFin: String
   ): [ReservaConsulta!]!
-  historialAlquileres(documento: String!): [AlquilerHistorial!]!
 
+  """
+  Recupera el historial de alquileres pasados o cancelados de un cliente según su documento.
+  Comportamiento:
+    - Resuelve el cliente en Customer Service por su número de documento.
+    - Si el cliente no existe o el documento está vacío, devuelve una lista vacía sin arrojar error.
+    - Filtra del historial únicamente alquileres históricos: aquellos con estado CANCELADA,
+      FINALIZADA o cuya fecha de fin ya expiró respecto al momento actual.
+    - Calcula la duración en días (cantDias) y enriquece los datos del vehículo asociado.
+    - Ordena el historial de forma cronológica descendente (el más reciente primero).
+  Posibles errores:
+    - INTERNAL_ERROR: Si ocurre un fallo inesperado o falla la comunicación con los servicios internos.
+  """
+  historialAlquileres(
+    """
+    Número o código de documento de identidad del cliente (alfanumérico, ej. '38999111').
+    """
+    documento: String!
+  ): [AlquilerHistorial!]!
+
+  """
+  Verificación simple de operatividad (health check) del subsistema GraphQL del API Gateway.
+  Devuelve un mensaje diagnóstico confirmando que el Gateway está activo y listo para gRPC.
+  """
   pingGateway: String
 }
 
+"""
+Representación de un vehículo de la flota disponible para ser alquilado.
+"""
 type VehiculoDisponible {
+  """
+  Identificador único numérico del vehículo en la base de datos de Vehicle Service.
+  """
   id: ID!
+
+  """
+  Marca o fabricante del vehículo (ej. 'Toyota', 'Ford').
+  """
   marca: String!
+
+  """
+  Denominación comercial o modelo del vehículo (ej. 'Corolla', 'Focus').
+  """
   modelo: String!
+
+  """
+  Año de fabricación o modelo del vehículo (ej. 2024).
+  """
   anio: Int!
+
+  """
+  Patente registral única e inmutable del vehículo (ej. 'AA123BB').
+  """
   patente: String!
+
+  """
+  Color predominante de la carrocería del vehículo (opcional, puede ser nulo).
+  """
   color: String
+
+  """
+  Categoría o tipo de carrocería del vehículo (SEDAN, SUV, PICKUP, COUPE, HATCHBACK).
+  """
   tipo: TipoVehiculo!
+
+  """
+  Tarifa diaria de alquiler en moneda del sistema expresada como número decimal (ej. 25000.00).
+  """
   precioDiario: Float!
 }
 
+"""
+Detalle de una reserva en el sistema, enriquecida con datos del cliente y del vehículo involucrado.
+"""
 type ReservaConsulta {
+  """
+  Identificador único de la reserva asignado en Rental Service.
+  """
   id: ID!
+
+  """
+  Fecha y hora de inicio de la reserva en formato estándar ISO-8601 UTC (ej. '2026-11-01T10:00:00Z').
+  """
   fechaInicio: String!
+
+  """
+  Fecha y hora de finalización de la reserva en formato estándar ISO-8601 UTC (ej. '2026-11-05T18:00:00Z').
+  """
   fechaFin: String!
+
+  """
+  Tarifa diaria de alquiler del vehículo aplicada a la consulta.
+  """
   precioDiario: Float!
+
+  """
+  Monto total del alquiler calculado en función de la duración de la reserva y la tarifa.
+  """
   importeTotal: Float!
+
+  """
+  Estado operativo actual de la reserva en su ciclo de vida (CONFIRMADA, CANCELADA, FINALIZADA).
+  """
   estado: EstadoReserva!
+
+  """
+  Datos personales de contacto e identidad del cliente titular de la reserva.
+  """
   cliente: ClienteReserva!
+
+  """
+  Datos técnicos y registrales del vehículo reservado.
+  """
   vehiculo: VehiculoReserva!
 }
 
+"""
+Registro de un alquiler perteneciente al historial de un cliente.
+"""
 type AlquilerHistorial {
+  """
+  Identificador único de la reserva / alquiler en Rental Service.
+  """
   id: ID!
+
+  """
+  Fecha y hora de inicio del período de alquiler en formato ISO-8601 UTC.
+  """
   fechaInicio: String!
+
+  """
+  Fecha y hora de finalización del período de alquiler en formato ISO-8601 UTC.
+  """
   fechaFin: String!
+
+  """
+  Cantidad total de días de alquiler computados entre la fecha de inicio y fin (mínimo 1 día).
+  """
   cantDias: Int!
+
+  """
+  Importe total facturado o acordado por el período del alquiler.
+  """
   importeTotal: Float!
+
+  """
+  Estado final del alquiler (CONFIRMADA, CANCELADA o FINALIZADA).
+  """
   estado: EstadoReserva!
+
+  """
+  Datos del vehículo que fue utilizado en el alquiler.
+  """
   vehiculo: VehiculoReserva!
 }
 
+"""
+Información básica de identidad del cliente asociada a una reserva.
+"""
 type ClienteReserva {
+  """
+  Nombre de pila del cliente.
+  """
   nombre: String!
+
+  """
+  Apellido del cliente.
+  """
   apellido: String!
+
+  """
+  Documento único de identidad del cliente (alfanumérico, ej. '38999111').
+  """
   documento: String!
 }
 
+"""
+Información técnica y de identificación del vehículo asociada a una reserva o alquiler.
+"""
 type VehiculoReserva {
+  """
+  Marca o fabricante del vehículo (ej. 'Toyota').
+  """
   marca: String!
+
+  """
+  Modelo o versión del vehículo (ej. 'Corolla').
+  """
   modelo: String!
+
+  """
+  Año de fabricación del vehículo (ej. 2024).
+  """
   anio: Int!
+
+  """
+  Matrícula / patente registral única del vehículo (ej. 'AA123BB').
+  """
   patente: String!
+
+  """
+  Categoría o tipo de carrocería del vehículo (SEDAN, SUV, PICKUP, COUPE, HATCHBACK).
+  """
   tipo: TipoVehiculo!
 }
 
+"""
+Tipos o categorías de carrocería permitidos para los vehículos de la plataforma.
+"""
 enum TipoVehiculo {
+  """
+  Automóvil sedán tradicional de 4 o 5 puertas con baúl separado.
+  """
   SEDAN
+
+  """
+  Vehículo utilitario deportivo (Sport Utility Vehicle) o camioneta cerrada.
+  """
   SUV
+
+  """
+  Camioneta utilitaria de carga con caja abierta trasera.
+  """
   PICKUP
+
+  """
+  Automóvil deportivo cerrado de 2 o 3 puertas.
+  """
   COUPE
+
+  """
+  Automóvil compacto de 3 o 5 puertas con portón trasero integrado.
+  """
   HATCHBACK
 }
 
+"""
+Estados operativos del ciclo de vida de una reserva de vehículo.
+"""
 enum EstadoReserva {
+  """
+  Reserva activa confirmada. Bloquea la disponibilidad del vehículo en las fechas reservadas.
+  """
   CONFIRMADA
+
+  """
+  Reserva cancelada por el usuario o administración. No bloquea disponibilidad de flota.
+  """
   CANCELADA
+
+  """
+  Reserva cuyo período ha finalizado y el vehículo ha sido devuelto a la flota.
+  """
   FINALIZADA
 }
