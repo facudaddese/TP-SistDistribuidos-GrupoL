@@ -211,7 +211,7 @@ Los puertos publicados están vinculados a `127.0.0.1` en Compose.
 | Frontend | http://localhost:5173 |
 | API Gateway | http://localhost:8080 |
 | Swagger UI | http://localhost:8080/swagger-ui/index.html |
-| GraphQL —solicitudes POST— | http://localhost:8080/graphql |
+| GraphQL —solicitudes POST— | http://localhost:8080/graphiql.html |
 | Salud del Gateway | http://localhost:8080/actuator/health |
 | RabbitMQ Management | http://localhost:15672 |
 | RabbitMQ AMQP | localhost:5672 |
