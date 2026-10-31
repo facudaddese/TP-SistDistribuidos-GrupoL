@@ -1,4 +1,4 @@
-﻿x-grpc-health: &grpc-health
+x-grpc-health: &grpc-health
   test:
     - CMD
     - node
@@ -25,6 +25,8 @@ services:
       MYSQL_USER: ${MYSQL_USER:-rentar_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-rentar_password}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rentar_root_password}
+    ports:
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -43,6 +45,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rentar_rabbit}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rentar_rabbit_pass}
     ports:
+      - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq

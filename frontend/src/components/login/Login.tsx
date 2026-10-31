@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
-import { TextField, Button, Box, Alert, IconButton, InputAdornment } from "@mui/material";
+import {
+  TextField,
+  Button,
+  Box,
+  Alert,
+  IconButton,
+  InputAdornment,
+} from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { useAuth } from "../../context/AuthContext";
@@ -29,11 +36,40 @@ const Login = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Si ya está autenticado, redirigir según su rol
+  // Helper para resolver a dónde mandar al usuario según su rol y la ruta de origen (from)
+  const resolverRutaDestino = (userRol: string, fromPath?: string) => {
+    const rolUpper = (userRol || "").toUpperCase();
+    const isAdmin = rolUpper === "ADMINISTRADOR" || rolUpper === "ADMIN";
+
+    // Si viene de /unauthorized o /login o no hay ruta previa, redirigir al panel por defecto
+    if (!fromPath || fromPath === "/unauthorized" || fromPath === "/login") {
+      return isAdmin ? "/admin/vehiculos" : "/reservar";
+    }
+
+    // Validar si un cliente intenta entrar a una ruta de admin
+    if (
+      !isAdmin &&
+      (fromPath.startsWith("/admin") || fromPath === "/clientes")
+    ) {
+      return "/reservar";
+    }
+
+    // Validar si un admin intenta entrar a una ruta exclusiva de cliente
+    if (
+      isAdmin &&
+      (fromPath === "/historial-alquileres" || fromPath === "/reservar")
+    ) {
+      return "/admin/vehiculos";
+    }
+
+    return fromPath;
+  };
+
+  // Si ya está autenticado
   if (isAuthenticated && rol) {
-    const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
-    const defaultRoute = rol === "ADMINISTRADOR" ? "/admin/vehiculos" : "/";
-    return <Navigate to={from || defaultRoute} replace />;
+    const from = (location.state as { from?: { pathname: string } })?.from
+      ?.pathname;
+    return <Navigate to={resolverRutaDestino(rol, from)} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,20 +86,20 @@ const Login = () => {
     try {
       const authUser = await login({ email: emailTrim, password });
 
-      // Redirección automática según el rol
-      const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
-      if (from) {
-        navigate(from, { replace: true });
-      } else if (authUser.rol === "ADMINISTRADOR") {
-        navigate("/admin/vehiculos", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      const from = (location.state as { from?: { pathname: string } })?.from
+        ?.pathname;
+      const destino = resolverRutaDestino(authUser.rol, from);
+
+      navigate(destino, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message || "Credenciales incorrectas o usuario no habilitado.");
+        setError(
+          err.message || "Credenciales incorrectas o usuario no habilitado.",
+        );
       } else {
-        setError("Error al comunicarse con el servidor. Verificá que el backend esté activo.");
+        setError(
+          "Error al comunicarse con el servidor. Verificá que el backend esté activo.",
+        );
       }
     } finally {
       setLoading(false);
@@ -89,7 +125,10 @@ const Login = () => {
         </div>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 3, bgcolor: "rgba(239, 68, 68, 0.15)", color: "#fca5a5" }}>
+          <Alert
+            severity="error"
+            sx={{ mb: 3, bgcolor: "rgba(239, 68, 68, 0.15)", color: "#fca5a5" }}
+          >
             {error}
           </Alert>
         )}
@@ -149,8 +188,9 @@ const Login = () => {
           </Button>
         </form>
 
-        {/* Accesos rápidos de prueba para evaluación universitaria */}
-        <Box sx={{ mt: 4, pt: 3, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        <Box
+          sx={{ mt: 4, pt: 3, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+        >
           <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2 text-center">
             Credenciales de prueba (desarrollo):
           </p>
@@ -167,7 +207,9 @@ const Login = () => {
 
             <button
               type="button"
-              onClick={() => handleQuickFill("cliente@rentar.com", "cliente123")}
+              onClick={() =>
+                handleQuickFill("cliente@rentar.com", "cliente123")
+              }
               className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-left transition-colors"
             >
               <div className="font-bold text-green-400">CLIENTE</div>
@@ -178,7 +220,9 @@ const Login = () => {
           <div className="mt-2 text-center">
             <button
               type="button"
-              onClick={() => handleQuickFill("inactivo@rentar.com", "inactivo123")}
+              onClick={() =>
+                handleQuickFill("inactivo@rentar.com", "inactivo123")
+              }
               className="text-[11px] text-gray-400 hover:text-red-300 underline"
             >
               Probar usuario inactivo (inactivo@rentar.com)

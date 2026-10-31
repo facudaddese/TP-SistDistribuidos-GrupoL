@@ -2,77 +2,376 @@ syntax = "proto3";
 
 package customer;
 
+// ============================================================================
+// Customer Service - Contrato gRPC
+// ============================================================================
+// Responsabilidad del servicio:
+//   Gestionar el ciclo de vida y los datos maestros de los clientes (usuarios
+//   de la plataforma de alquiler de vehículos): registro, consulta, modificación
+//   y baja lógica, así como la verificación de existencia y estado de actividad.
+//
+// Dominio que posee:
+//   Entidad Cliente (id, documento, nombre, apellido, email, password hasheada,
+//   telefono, fechaNacimiento, activo).
+//
+// Lo que NO hace (límites de responsabilidad):
+//   - NO gestiona sesiones de usuario ni emite tokens de autenticación (JWT).
+//   - NO administra reservas, disponibilidad de flota ni cobros / pagos.
+//   - NO expone endpoints públicos a internet: es consumido EXCLUSIVAMENTE por
+//     el API Gateway a través de la red interna.
+//
+// Infraestructura y red:
+//   - Puerto por defecto: 50051 (TCP / gRPC).
+//   - Protocolo: HTTP/2 con Protocol Buffers v3.
+//   - Acceso: Red interna / Docker network. Tráfico privado no accesible
+//     directamente por navegadores ni clientes externos.
+// ============================================================================
 service CustomerService {
+  // ConsultarClientes
+  // Finalidad:
+  //   Obtiene la lista de clientes registrados en el sistema, permitiendo filtrar
+  //   opcionalmente solo los clientes activos.
+  // Parámetros:
+  //   ConsultarClientesRequest (flag "soloActivos").
+  // Devuelve:
+  //   ListaClientesResponse con la colección de clientes (activos o todos).
+  // Reglas de negocio:
+  //   - Si soloActivos es true, filtra clientes con activo = true (1).
+  //   - Si soloActivos es false (default proto3), devuelve todos sin filtrar.
+  // Códigos gRPC:
+  //   - OK (0): Consulta completada con éxito (la lista puede ser vacía).
+  //   - INTERNAL (13): Error de conexión con MySQL o fallo inesperado del servidor.
   rpc ConsultarClientes (ConsultarClientesRequest) returns (ListaClientesResponse);
+
+  // ConsultarCliente
+  // Finalidad:
+  //   Recupera el detalle completo del perfil de un cliente a partir de su ID.
+  // Parámetros:
+  //   ConsultarClienteRequest (campo "id").
+  // Devuelve:
+  //   ClienteResponse con los datos del cliente encontrado.
+  // Reglas de negocio:
+  //   - El ID debe ser un número entero positivo mayor a 0.
+  // Códigos gRPC:
+  //   - OK (0): Cliente encontrado y devuelto con éxito.
+  //   - INVALID_ARGUMENT (3): Si el ID no es un entero positivo válido (> 0).
+  //   - NOT_FOUND (5): Si no existe ningún cliente registrado con el ID solicitado.
+  //   - INTERNAL (13): Error de acceso a base de datos o fallo del servidor.
   rpc ConsultarCliente (ConsultarClienteRequest) returns (ClienteResponse);
+
+  // VerificarExistencia
+  // Finalidad:
+  //   Comprobación ligera de existencia de un cliente por su ID sin retornar
+  //   todos los datos de su perfil.
+  // Parámetros:
+  //   VerificarClienteRequest (campo "id").
+  // Devuelve:
+  //   ExistenciaResponse (campo booleano "existe").
+  // Reglas de negocio:
+  //   - Usado por el API Gateway para validaciones previas y aserciones rápidas.
+  //   - NO lanza NOT_FOUND si el cliente no existe; retorna OK con existe = false.
+  // Códigos gRPC:
+  //   - OK (0): Verificación completada (existe: true o false).
+  //   - INVALID_ARGUMENT (3): Si el ID no es un entero positivo mayor a 0.
+  //   - INTERNAL (13): Error de conexión o consulta en base de datos.
   rpc VerificarExistencia (VerificarClienteRequest) returns (ExistenciaResponse);
+
+  // VerificarActivo
+  // Finalidad:
+  //   Verifica simultáneamente si un cliente existe y si su estado es activo
+  //   (no dado de baja).
+  // Parámetros:
+  //   VerificarClienteRequest (campo "id").
+  // Devuelve:
+  //   ActivoResponse (campos booleanos "existe" y "activo").
+  // Reglas de negocio:
+  //   - Consumido fundamentalmente por el API Gateway durante la orquestación
+  //     de creación de reservas para asegurar que el solicitante sea válido y
+  //     esté habilitado operativamente.
+  //   - NO lanza NOT_FOUND si no existe; retorna OK con existe = false y activo = false.
+  // Códigos gRPC:
+  //   - OK (0): Consulta realizada exitosamente.
+  //   - INVALID_ARGUMENT (3): Si el ID no es un entero positivo mayor a 0.
+  //   - INTERNAL (13): Error interno del servidor o falla de base de datos.
   rpc VerificarActivo (VerificarClienteRequest) returns (ActivoResponse);
+
+  // ConsultarClientePorDocumento
+  // Finalidad:
+  //   Recupera el detalle de un cliente a partir de su número único de documento.
+  // Parámetros:
+  //   ConsultarClientePorDocumentoRequest (campo "documento").
+  // Devuelve:
+  //   ClienteResponse con los datos del cliente encontrado.
+  // Reglas de negocio:
+  //   - El documento debe ser alfanumérico y de hasta 20 caracteres (^[a-zA-Z0-9]{1,20}$).
+  //   - Usado por el API Gateway para resolver el clienteId a partir del documento
+  //     al consultar historiales o validar identidades.
+  // Códigos gRPC:
+  //   - OK (0): Cliente encontrado y devuelto con éxito.
+  //   - INVALID_ARGUMENT (3): Documento vacío, no alfanumérico o mayor a 20 caracteres.
+  //   - NOT_FOUND (5): Si no existe ningún cliente con el documento indicado.
+  //   - INTERNAL (13): Error de acceso a base de datos o fallo del servidor.
   rpc ConsultarClientePorDocumento (ConsultarClientePorDocumentoRequest) returns (ClienteResponse);
+
+  // CrearCliente
+  // Finalidad:
+  //   Registra un nuevo cliente en el sistema.
+  // Parámetros:
+  //   CrearClienteRequest (documento, nombre, apellido, email, password, telefono,
+  //   fechaNacimiento).
+  // Devuelve:
+  //   ClienteResponse con los datos del cliente recién creado (activo = true) y
+  //   su ID asignado. NUNCA devuelve la contraseña ni su hash.
+  // Reglas de negocio:
+  //   - documento: obligatorio, alfanumérico, máx 20 caracteres, único en el sistema.
+  //   - nombre / apellido: obligatorios, no vacíos, longitud máx 100 caracteres.
+  //   - email: obligatorio, formato válido de email, máx 150 caracteres, único.
+  //   - password: obligatoria, mínimo 6 caracteres. Se hashea con bcrypt (factor de
+  //     costo 10) antes de persistirse. NUNCA se retorna ni se imprime en logs.
+  //   - telefono: opcional, máx 30 caracteres.
+  //   - fechaNacimiento: opcional, formato yyyy-MM-dd, fecha calendario válida en el pasado.
+  //   - El cliente se da de alta automáticamente con activo = true.
+  // Códigos gRPC:
+  //   - OK (0): Cliente creado exitosamente.
+  //   - INVALID_ARGUMENT (3): Violación en validaciones de formato de documento, nombre,
+  //     apellido, email, password (< 6 caracteres), telefono (> 30) o fechaNacimiento
+  //     (formato incorrecto, inexistente en calendario o fecha futura/presente).
+  //   - ALREADY_EXISTS (6): Si ya existe un cliente con el mismo documento o email
+  //     (violación de índice UNIQUE en MySQL, código ER_DUP_ENTRY).
+  //   - INTERNAL (13): Error interno del servidor o fallo de persistencia en MySQL.
   rpc CrearCliente (CrearClienteRequest) returns (ClienteResponse);
+
+  // ModificarCliente
+  // Finalidad:
+  //   Actualiza los datos de perfil de un cliente existente.
+  // Parámetros:
+  //   ModificarClienteRequest (id, documento, nombre, apellido, email, telefono,
+  //   fechaNacimiento).
+  // Devuelve:
+  //   ClienteResponse con los datos actualizados del cliente.
+  // Reglas de negocio:
+  //   - El ID debe ser un entero positivo mayor a 0.
+  //   - No modifica la contraseña (se preserva la existente).
+  //   - Mismas reglas de validación que el alta para documento, nombre, apellido,
+  //     email, telefono y fechaNacimiento.
+  //   - Se valida la unicidad de documento y email frente al resto de los clientes.
+  // Códigos gRPC:
+  //   - OK (0): Cliente modificado exitosamente.
+  //   - INVALID_ARGUMENT (3): ID inválido o fallo en las validaciones de campos.
+  //   - NOT_FOUND (5): Si no existe ningún cliente con el ID especificado.
+  //   - ALREADY_EXISTS (6): Si el nuevo documento o email ya pertenece a otro cliente.
+  //   - INTERNAL (13): Error interno de actualización o fallo en base de datos.
   rpc ModificarCliente (ModificarClienteRequest) returns (ClienteResponse);
+
+  // DarDeBajaCliente
+  // Finalidad:
+  //   Efectúa la baja lógica de un cliente en el sistema.
+  // Parámetros:
+  //   DarDeBajaClienteRequest (campo "id").
+  // Devuelve:
+  //   ClienteResponse con el cliente actualizado reflejando activo = false.
+  // Reglas de negocio:
+  //   - Baja lógica: establece activo = 0 en base de datos, preservando la integridad
+  //     referencial histórica de alquileres y reservas pasadas.
+  //   - Si el cliente ya se encontraba inactivo (activo = 0), la operación falla
+  //     lanzando ClienteYaInactivoError.
+  // Códigos gRPC:
+  //   - OK (0): Cliente dado de baja con éxito.
+  //   - INVALID_ARGUMENT (3): Si el ID no es un entero positivo mayor a 0.
+  //   - NOT_FOUND (5): Si no existe ningún cliente con el ID especificado.
+  //   - FAILED_PRECONDITION (9): Si el cliente ya se encontraba dado de baja previamente.
+  //   - INTERNAL (13): Error de actualización o fallo de base de datos.
   rpc DarDeBajaCliente (DarDeBajaClienteRequest) returns (ClienteResponse);
 }
 
+// ----------------------------------------------------------------------------
+// Mensajes de Petición y Respuesta
+// ----------------------------------------------------------------------------
+
+// Petición de consulta por documento de identidad.
 message ConsultarClientePorDocumentoRequest {
+  // Documento único de identidad del cliente.
+  // Obligatorio. Formato: alfanumérico sin espacios ni puntos, máx 20 caracteres.
+  // Ejemplo: "38999111" o "ABC12345".
   string documento = 1;
 }
 
+// Petición para listar clientes con filtro opcional de actividad.
 message ConsultarClientesRequest {
+  // Filtro de estado de actividad.
+  // Opcional. Si es true, retorna únicamente clientes activos (activo = true).
+  // Valor por defecto proto3: false, que significa "sin filtro" (retorna todos los
+  // clientes registrados, tanto activos como dados de baja lógica).
+  // Ejemplo: true.
   bool soloActivos = 1;
 }
 
+// Petición para consultar un cliente por su identificador único.
 message ConsultarClienteRequest {
+  // Identificador único numérico del cliente en base de datos.
+  // Obligatorio. Debe ser un entero positivo mayor a 0.
+  // Valor por defecto proto3: 0 (considerado inválido por la lógica del servicio).
+  // Ejemplo: 1.
   int32 id = 1;
 }
 
+// Petición de verificación de existencia o estado activo por identificador.
 message VerificarClienteRequest {
+  // Identificador único numérico del cliente a verificar.
+  // Obligatorio. Debe ser un entero positivo mayor a 0.
+  // Valor por defecto proto3: 0 (considerado inválido por la lógica del servicio).
+  // Ejemplo: 10.
   int32 id = 1;
 }
 
+// Representación completa del perfil de un cliente devuelta por el servicio.
+// Nota de seguridad: NUNCA incluye el campo password ni passwordHash.
 message ClienteResponse {
+  // Identificador único numérico autoincremental asignado en MySQL.
+  // Siempre positivo (> 0). Ejemplo: 1.
   int32 id = 1;
+
+  // Número o código de documento único del cliente.
+  // Formato: alfanumérico, máx 20 caracteres. Ejemplo: "38999111".
   string documento = 2;
+
+  // Nombre de pila del cliente.
+  // Formato: texto de 1 a 100 caracteres. Ejemplo: "Juan".
   string nombre = 3;
+
+  // Apellido del cliente.
+  // Formato: texto de 1 a 100 caracteres. Ejemplo: "Pérez".
   string apellido = 4;
+
+  // Correo electrónico único del cliente.
+  // Formato: email válido de hasta 150 caracteres. Ejemplo: "juan.perez@example.com".
   string email = 5;
+
+  // Teléfono de contacto del cliente.
+  // Opcional. Formato: texto de hasta 30 caracteres. Si no fue provisto en BD,
+  // se devuelve la cadena vacía "" por convención proto3.
+  // Ejemplo: "+54 11 5555-1234".
   string telefono = 6;
+
+  // Fecha de nacimiento del cliente.
+  // Opcional. Formato: ISO calendario "yyyy-MM-dd". Si no fue informada,
+  // se devuelve la cadena vacía "" por convención proto3.
+  // Ejemplo: "1990-05-15".
   string fechaNacimiento = 7;
+
+  // Estado de actividad / baja lógica del cliente.
+  // true = cliente habilitado y operativo; false = cliente dado de baja lógica.
+  // Ejemplo: true.
   bool activo = 8;
 }
 
+// Colección de clientes devuelta al consultar el listado general.
 message ListaClientesResponse {
+  // Lista de clientes encontrados. Puede ser vacía si no hay coincidencias.
   repeated ClienteResponse clientes = 1;
 }
 
+// Respuesta a la verificación liviana de existencia de cliente.
 message ExistenciaResponse {
+  // true si existe un cliente con el ID consultado en el sistema; false en caso contrario.
+  // Ejemplo: true.
   bool existe = 1;
 }
 
+// Respuesta a la verificación de estado activo y existencia para orquestación de reservas.
 message ActivoResponse {
+  // true si el cliente existe en el sistema; false si no fue encontrado.
+  // Ejemplo: true.
   bool existe = 1;
+
+  // true si el cliente existe y su estado es activo (activo = 1 en BD);
+  // false si está dado de baja lógica o si existe = false.
+  // Ejemplo: true.
   bool activo = 2;
 }
 
+// Petición para registrar un nuevo cliente en el sistema.
 message CrearClienteRequest {
+  // Documento de identidad único del cliente.
+  // Obligatorio. Formato: alfanumérico sin caracteres especiales, máx 20 caracteres.
+  // Ejemplo: "38999111".
   string documento = 1;
+
+  // Nombre de pila del cliente.
+  // Obligatorio. Formato: texto no vacío de 1 a 100 caracteres.
+  // Ejemplo: "María".
   string nombre = 2;
+
+  // Apellido del cliente.
+  // Obligatorio. Formato: texto no vacío de 1 a 100 caracteres.
+  // Ejemplo: "Gómez".
   string apellido = 3;
+
+  // Correo electrónico único del cliente.
+  // Obligatorio. Formato: dirección de email válida, máx 150 caracteres.
+  // Ejemplo: "maria.gomez@example.com".
   string email = 4;
+
+  // Contraseña en texto plano para el registro de la cuenta.
+  // Obligatorio. Longitud mínima: 6 caracteres.
+  // El servicio la encripta con bcrypt (10 rounds) y nunca la almacena en plano.
+  // Ejemplo: "claveSegura123".
   string password = 5;
+
+  // Teléfono de contacto del cliente.
+  // Opcional. Longitud máx: 30 caracteres. Valor por defecto proto3: "" (sin teléfono).
+  // Ejemplo: "+54 11 4444-5555".
   string telefono = 6;
+
+  // Fecha de nacimiento del cliente.
+  // Opcional. Formato: "yyyy-MM-dd". Debe ser fecha calendario válida y estrictamente
+  // anterior a la fecha actual. Valor por defecto proto3: "" (sin fecha).
+  // Ejemplo: "1985-12-01".
   string fechaNacimiento = 7;
 }
 
+// Petición para modificar los datos de perfil de un cliente existente.
 message ModificarClienteRequest {
+  // Identificador único numérico del cliente a modificar.
+  // Obligatorio. Debe ser un entero positivo mayor a 0.
+  // Ejemplo: 5.
   int32 id = 1;
+
+  // Documento de identidad actualizado.
+  // Obligatorio. Formato: alfanumérico, máx 20 caracteres, único entre clientes.
+  // Ejemplo: "38999111".
   string documento = 2;
+
+  // Nombre de pila actualizado.
+  // Obligatorio. Formato: texto no vacío de 1 a 100 caracteres.
+  // Ejemplo: "María".
   string nombre = 3;
+
+  // Apellido actualizado.
+  // Obligatorio. Formato: texto no vacío de 1 a 100 caracteres.
+  // Ejemplo: "Gómez".
   string apellido = 4;
+
+  // Correo electrónico actualizado.
+  // Obligatorio. Formato: email válido, máx 150 caracteres, único entre clientes.
+  // Ejemplo: "maria.gomez@newmail.com".
   string email = 5;
+
+  // Teléfono de contacto actualizado.
+  // Opcional. Longitud máx: 30 caracteres. Enviar "" para dejarlo vacío o nulo.
+  // Ejemplo: "+54 11 4444-9999".
   string telefono = 6;
+
+  // Fecha de nacimiento actualizada.
+  // Opcional. Formato: "yyyy-MM-dd", calendario válido en el pasado. Enviar "" para nulo.
+  // Ejemplo: "1985-12-01".
   string fechaNacimiento = 7;
 }
 
+// Petición para dar de baja lógica a un cliente.
 message DarDeBajaClienteRequest {
+  // Identificador único numérico del cliente a dar de baja.
+  // Obligatorio. Debe ser un entero positivo mayor a 0.
+  // Ejemplo: 5.
   int32 id = 1;
 }

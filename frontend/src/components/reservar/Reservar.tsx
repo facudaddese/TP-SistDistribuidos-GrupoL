@@ -104,6 +104,13 @@ const Reservar = () => {
     }
   };
 
+    const vehiculoReservado = reservaCreada
+        ? vehiculos.find(
+            (vehiculo) =>
+                String(vehiculo.id) === String(reservaCreada.vehiculoId),
+        )
+        : undefined;
+
   return (
     <section className="bg-gray-50/5 p-4 mx-10">
       <h2 className="text-[35px] text-gray-100 font-medium py-4">Reservar</h2>
@@ -168,10 +175,12 @@ const Reservar = () => {
           }}
         >
           <p className="font-bold text-lg pb-2">Reserva #{reservaCreada.id}</p>
-          <p>
-            Vehículo: {reservaCreada.vehiculo.marca} {reservaCreada.vehiculo.modelo} (
-            {reservaCreada.vehiculo.patente})
-          </p>
+            <p>
+                Vehículo:{" "}
+                {vehiculoReservado
+                    ? `${vehiculoReservado.marca} ${vehiculoReservado.modelo} (${vehiculoReservado.patente})`
+                    : `ID ${reservaCreada.vehiculoId}`}
+            </p>
           <p>Importe total: ${reservaCreada.importeTotal}</p>
           <p>Estado: {reservaCreada.estado}</p>
 

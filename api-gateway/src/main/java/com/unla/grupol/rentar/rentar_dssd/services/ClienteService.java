@@ -1,143 +1,80 @@
 package com.unla.grupol.rentar.rentar_dssd.services;
 
+import customer.Customer.ClienteResponse;
+import customer.Customer.ConsultarClienteRequest;
+import customer.Customer.ConsultarClientesRequest;
+import customer.Customer.CrearClienteRequest;
+import customer.Customer.DarDeBajaClienteRequest;
+import customer.Customer.ListaClientesResponse;
+import customer.Customer.ModificarClienteRequest;
 import com.unla.grupol.rentar.rentar_dssd.dto.ClienteRequest;
-import com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse;
 import com.unla.grupol.rentar.rentar_dssd.dto.ClienteUpdateRequest;
-import com.unla.grupol.rentar.rentar_dssd.entities.Cliente;
-import com.unla.grupol.rentar.rentar_dssd.exceptions.RecursoNoEncontradoException;
-import com.unla.grupol.rentar.rentar_dssd.repositories.ClienteRepository;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.unla.grupol.rentar.rentar_dssd.grpc.ClienteGrpcMapper;
+import com.unla.grupol.rentar.rentar_dssd.grpc.GrpcClientManager;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class ClienteService {
 
-    private final ClienteRepository clienteRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final GrpcClientManager grpcClientManager;
+    private final ClienteGrpcMapper clienteGrpcMapper;
 
-    public ClienteService(
-            ClienteRepository clienteRepository,
-            PasswordEncoder passwordEncoder
-    ) {
-        this.clienteRepository = clienteRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
-
-    @Transactional(readOnly = true)
-    public List<ClienteResponse> listar() {
-        return clienteRepository.findAllByActivoTrue()
-                .stream()
-                .map(this::convertirAResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public ClienteResponse buscarPorId(Long id) {
-        Cliente cliente = buscarEntidad(id);
-        return convertirAResponse(cliente);
-    }
-
-    @Transactional
-    public ClienteResponse crear(ClienteRequest request) {
-        if (clienteRepository.existsByDocumento(request.documento())) {
-            throw new IllegalArgumentException(
-                    "Ya existe un cliente con ese documento"
-            );
-        }
-
-        if (clienteRepository.existsByEmail(request.email())) {
-            throw new IllegalArgumentException(
-                    "Ya existe un usuario con ese email"
-            );
-        }
-
-        Cliente cliente = Cliente.builder()
-                .documento(request.documento())
-                .nombre(request.nombre())
-                .apellido(request.apellido())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .telefono(request.telefono())
-                .fechaNacimiento(request.fechaNacimiento())
-                .activo(true)
+    public List<com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse> listar() {
+        // En el comportamiento anterior, listar() consultaba findAllByActivoTrue()
+        ConsultarClientesRequest grpcRequest = ConsultarClientesRequest.newBuilder()
+                .setSoloActivos(true)
                 .build();
-
-        Cliente clienteGuardado = clienteRepository.save(cliente);
-
-        return convertirAResponse(clienteGuardado);
+        ListaClientesResponse grpcResponse = grpcClientManager.getCustomerStub().consultarClientes(grpcRequest);
+        return clienteGrpcMapper.toResponseDTOList(grpcResponse);
     }
 
-    @Transactional
-    public ClienteResponse actualizar(
-            Long id,
-            ClienteUpdateRequest request
-    ) {
-        Cliente cliente = buscarEntidad(id);
-
-        clienteRepository.findByDocumento(request.documento())
-                .filter(encontrado -> !encontrado.getId().equals(id))
-                .ifPresent(encontrado -> {
-                    throw new IllegalArgumentException(
-                            "Ya existe otro cliente con ese documento"
-                    );
-                });
-
-        clienteRepository.findByEmail(request.email())
-                .filter(encontrado -> !encontrado.getId().equals(id))
-                .ifPresent(encontrado -> {
-                    throw new IllegalArgumentException(
-                            "Ya existe otro usuario con ese email"
-                    );
-                });
-
-        cliente.setDocumento(request.documento());
-        cliente.setNombre(request.nombre());
-        cliente.setApellido(request.apellido());
-        cliente.setEmail(request.email());
-        cliente.setTelefono(request.telefono());
-        cliente.setFechaNacimiento(request.fechaNacimiento());
-
-        Cliente clienteActualizado = clienteRepository.save(cliente);
-
-        return convertirAResponse(clienteActualizado);
+    public com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse buscarPorId(Long id) {
+        ConsultarClienteRequest grpcRequest = ConsultarClienteRequest.newBuilder()
+                .setId(id != null ? Math.toIntExact(id) : 0)
+                .build();
+        ClienteResponse grpcResponse = grpcClientManager.getCustomerStub().consultarCliente(grpcRequest);
+        return clienteGrpcMapper.toResponseDTO(grpcResponse);
     }
 
-    @Transactional
+    public com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse crear(ClienteRequest request) {
+        // La contraseña no se hashea en el API Gateway; se envía tal cual a CrearCliente
+        // y customer-service la hashea con BCrypt. Viaja en texto claro solo por la red interna
+        // entre contenedores / servicios. La contraseña nunca se loguea ni se devuelve en la respuesta.
+        CrearClienteRequest grpcRequest = clienteGrpcMapper.toCrearRequest(request);
+        ClienteResponse grpcResponse = grpcClientManager.getCustomerStub().crearCliente(grpcRequest);
+        return clienteGrpcMapper.toResponseDTO(grpcResponse);
+    }
+
+    public com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse actualizar(Long id, ClienteUpdateRequest request) {
+        ModificarClienteRequest grpcRequest = clienteGrpcMapper.toModificarRequest(id, request);
+        ClienteResponse grpcResponse = grpcClientManager.getCustomerStub().modificarCliente(grpcRequest);
+        return clienteGrpcMapper.toResponseDTO(grpcResponse);
+    }
+
     public void darDeBaja(Long id) {
-        Cliente cliente = buscarEntidad(id);
+        DarDeBajaClienteRequest grpcRequest = DarDeBajaClienteRequest.newBuilder()
+                .setId(id != null ? Math.toIntExact(id) : 0)
+                .build();
+        grpcClientManager.getCustomerStub().darDeBajaCliente(grpcRequest);
+    }
 
-        if (!cliente.isActivo()) {
-            throw new IllegalArgumentException(
-                    "El cliente ya se encuentra dado de baja"
+    public com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse buscarPorDocumento(String documento) {
+        try {
+            customer.Customer.ClienteResponse grpcResponse = grpcClientManager.getCustomerStub().consultarClientePorDocumento(
+                    customer.Customer.ConsultarClientePorDocumentoRequest.newBuilder()
+                            .setDocumento(documento != null ? documento.trim() : "")
+                            .build()
             );
+            return clienteGrpcMapper.toResponseDTO(grpcResponse);
+        } catch (io.grpc.StatusRuntimeException e) {
+            if (e.getStatus().getCode() == io.grpc.Status.Code.NOT_FOUND) {
+                return null;
+            }
+            throw e;
         }
-
-        cliente.setActivo(false);
-        clienteRepository.save(cliente);
-    }
-
-    private Cliente buscarEntidad(Long id) {
-        return clienteRepository.findById(id)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "No se encontró el cliente con ID " + id
-                        )
-                );
-    }
-
-    private ClienteResponse convertirAResponse(Cliente cliente) {
-        return new ClienteResponse(
-                cliente.getId(),
-                cliente.getDocumento(),
-                cliente.getNombre(),
-                cliente.getApellido(),
-                cliente.getEmail(),
-                cliente.getTelefono(),
-                cliente.getFechaNacimiento(),
-                cliente.isActivo()
-        );
     }
 }

@@ -10,5 +10,7 @@ public interface ReservaService {
 
     List<ReservaResponseDTO> obtenerTodas();
 
+    List<ReservaResponseDTO> obtenerConFiltros(Long clienteId, Long vehiculoId, String estado);
+
     ReservaResponseDTO cancelarReserva(Long id);
 }

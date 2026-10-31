@@ -5,99 +5,599 @@ package vehicle;
 option java_package = "com.unla.grupol.rentar.grpc.vehicle";
 option java_multiple_files = true;
 
-// Servicio responsable del dominio de vehículos.
-// Los errores se comunican mediante códigos de estado gRPC.
+// ============================================================================
+// Vehicle Service - Contrato gRPC
+// ============================================================================
+// Responsabilidad del servicio:
+//   Gestionar el parque automotor de la plataforma: alta de flota, consulta,
+//   modificación, baja lógica y control de estados operativos de vehículos, así
+//   como la búsqueda con filtros de disponibilidad para alquileres y la gestión
+//   del circuito asíncrono de verificación policial e incorporación de vehículos
+//   externos propuestos por clientes.
+//
+// Dominio que posee:
+//   - Entidad Vehículo (id, patente inmutable, marca, modelo, anio, color,
+//     tipoVehiculo, precioDiario, estado operativo, activo).
+//   - Entidad Solicitud de Vehículo Externo (vehiculoExternoId, clienteId,
+//     patente, marca, modelo, anio, color, tipoVehiculo, precioDiario, estado,
+//     resultadoPatente, resultadoTitularidad, vehiculoId asignado).
+//
+// Lo que NO hace (límites de responsabilidad):
+//   - NO administra reservas, fechas de alquiler ni calendarios de ocupación
+//     (responsabilidad exclusiva de Rental Service).
+//   - NO calcula importes totales de alquiler ni procesa pagos o transacciones
+//     financieras.
+//   - NO administra cuentas ni identidades de clientes (responsabilidad de
+//     Customer Service).
+//   - NO expone endpoints públicos a internet: es consumido EXCLUSIVAMENTE por
+//     el API Gateway a través de la red interna.
+//
+// Infraestructura y red:
+//   - Puerto por defecto: 50052 (TCP / gRPC).
+//   - Protocolo: HTTP/2 con Protocol Buffers v3.
+//   - Integración asíncrona: Emite eventos hacia RabbitMQ ('solicitud.verificacion')
+//     al crear vehículos o registrar solicitudes para la verificación policial
+//     en segundo plano.
+//   - Acceso: Red interna / Docker network. Tráfico privado no accesible
+//     directamente por navegadores ni clientes externos.
+// ============================================================================
 service VehicleService {
-  // Lista vehículos; permite limitar el resultado a los activos.
+  // ConsultarVehiculos
+  // Finalidad:
+  //   Obtiene el listado completo de vehículos registrados en el catálogo,
+  //   permitiendo opcionalmente filtrar solo los activos.
+  // Parámetros:
+  //   ConsultarVehiculosRequest (flag "soloActivos").
+  // Devuelve:
+  //   ListaVehiculosResponse con la colección de vehículos.
+  // Reglas de negocio:
+  //   - Si soloActivos es true, filtra vehículos con activo = true.
+  //   - Si soloActivos es false (default proto3), lista todos los vehículos
+  //     (activos y dados de baja lógica).
+  // Códigos gRPC:
+  //   - OK (0): Consulta completada con éxito (la lista puede ser vacía).
+  //   - INTERNAL (13): Error de conexión o consulta en base de datos MySQL.
   rpc ConsultarVehiculos (ConsultarVehiculosRequest)
       returns (ListaVehiculosResponse);
 
-  // Consulta por ID. Devuelve NOT_FOUND si no existe.
+  // ConsultarVehiculo
+  // Finalidad:
+  //   Recupera el detalle completo de un vehículo específico por su identificador.
+  // Parámetros:
+  //   VehiculoIdRequest (campo "id").
+  // Devuelve:
+  //   VehiculoResponse con los datos del vehículo.
+  // Reglas de negocio:
+  //   - El ID debe ser un entero positivo de 64 bits (> 0 y <= Long.MAX_VALUE).
+  // Códigos gRPC:
+  //   - OK (0): Vehículo encontrado y devuelto con éxito.
+  //   - INVALID_ARGUMENT (3): Si el ID no es un entero positivo válido.
+  //   - NOT_FOUND (5): Si no existe ningún vehículo con el ID especificado.
+  //   - INTERNAL (13): Error interno del servidor o fallo de base de datos.
   rpc ConsultarVehiculo (VehiculoIdRequest)
       returns (VehiculoResponse);
 
-  // Crea un vehículo activo con estado DISPONIBLE.
+  // CrearVehiculo
+  // Finalidad:
+  //   Da de alta un nuevo vehículo en la flota propia del sistema, inicialmente
+  //   activo y en estado DISPONIBLE.
+  // Parámetros:
+  //   CrearVehiculoRequest (patente, marca, modelo, anio, color, tipoVehiculo,
+  //   precioDiario).
+  // Devuelve:
+  //   VehiculoResponse con los datos persistidos (activo = true, estado = "DISPONIBLE").
+  // Reglas de negocio:
+  //   - patente: obligatoria, máx 10 caracteres, única en la base de datos
+  //     (se almacena normalizada a mayúsculas y sin espacios).
+  //   - marca / modelo: obligatorios, máx 50 caracteres.
+  //   - anio: entero positivo mayor a 0.
+  //   - color: opcional, texto de máx 30 caracteres.
+  //   - tipoVehiculo: obligatorio, valores permitidos: SEDAN, SUV, PICKUP, COUPE, HATCHBACK.
+  //   - precioDiario: obligatorio, decimal positivo mayor a cero con hasta 8 dígitos
+  //     enteros y 2 decimales (formato: "^\d{1,8}(\.\d{1,2})?$"), ej. "25000.00".
+  //   - Verificación policial asíncrona: tras persistir el vehículo exitosamente,
+  //     el servicio publica de forma asíncrona un evento a RabbitMQ invocando a
+  //     'publicarSolicitudVerificacion' con id, patente, marca y modelo para iniciar
+  //     el chequeo policial en segundo plano.
+  // Códigos gRPC:
+  //   - OK (0): Vehículo creado exitosamente.
+  //   - INVALID_ARGUMENT (3): Formato de patente inválido o ausente, marca/modelo
+  //     vacíos o mayores a 50 caracteres, año menor o igual a 0, color > 30 caracteres,
+  //     tipoVehiculo fuera de los permitidos, precioDiario inválido o <= 0.
+  //   - ALREADY_EXISTS (6): Si ya existe un vehículo registrado con la misma patente
+  //     (código de MySQL ER_DUP_ENTRY).
+  //   - INTERNAL (13): Error interno de persistencia o fallo en base de datos.
   rpc CrearVehiculo (CrearVehiculoRequest)
       returns (VehiculoResponse);
 
-  // Modifica sus datos. La patente es inmutable.
+  // ModificarVehiculo
+  // Finalidad:
+  //   Actualiza los datos técnicos, descriptivos o el precio diario de un vehículo existente.
+  // Parámetros:
+  //   ModificarVehiculoRequest (id, marca, modelo, anio, color, tipoVehiculo, precioDiario).
+  // Devuelve:
+  //   VehiculoResponse con los datos actualizados.
+  // Reglas de negocio:
+  //   - id: entero positivo de 64 bits.
+  //   - La patente es INMUTABLE: no se incluye en el mensaje y no se permite alterar
+  //     la identificación registral original.
+  //   - Se aplican las mismas validaciones de negocio que en el alta para marca,
+  //     modelo, anio, color, tipoVehiculo y precioDiario.
+  // Códigos gRPC:
+  //   - OK (0): Vehículo actualizado con éxito.
+  //   - INVALID_ARGUMENT (3): ID inválido o violación en la validación de los campos.
+  //   - NOT_FOUND (5): Si no existe ningún vehículo con el ID especificado.
+  //   - INTERNAL (13): Error interno de actualización o fallo en base de datos.
   rpc ModificarVehiculo (ModificarVehiculoRequest)
       returns (VehiculoResponse);
 
-  // Realiza una baja lógica, conservando el registro.
+  // DarDeBajaVehiculo
+  // Finalidad:
+  //   Ejecuta la baja lógica de un vehículo en el catálogo del sistema.
+  // Parámetros:
+  //   VehiculoIdRequest (campo "id").
+  // Devuelve:
+  //   VehiculoResponse reflejando activo = false.
+  // Reglas de negocio:
+  //   - Baja lógica: establece activo = 0 en base de datos. El registro se conserva
+  //     para mantener la integridad referencial histórica con alquileres previos.
+  // Códigos gRPC:
+  //   - OK (0): Vehículo dado de baja correctamente.
+  //   - INVALID_ARGUMENT (3): Si el ID no es un entero positivo de 64 bits válido.
+  //   - NOT_FOUND (5): Si no existe un vehículo con el ID especificado.
+  //   - INTERNAL (13): Error interno del servidor o fallo de base de datos.
   rpc DarDeBajaVehiculo (VehiculoIdRequest)
       returns (VehiculoResponse);
 
-  // Actualiza el estado operativo del vehículo.
+  // ActualizarEstado
+  // Finalidad:
+  //   Modifica el estado operativo del vehículo durante su ciclo de vida (alquiler,
+  //   reserva o devolución).
+  // Parámetros:
+  //   ActualizarEstadoRequest (id, estado).
+  // Devuelve:
+  //   VehiculoResponse con el estado operativo modificado.
+  // Reglas de negocio:
+  //   - id: entero positivo de 64 bits.
+  //   - estado: debe ser estrictamente uno de los tres estados operativos válidos:
+  //     "DISPONIBLE", "RESERVADO" o "EN_ALQUILER".
+  // Códigos gRPC:
+  //   - OK (0): Estado operativo actualizado con éxito.
+  //   - INVALID_ARGUMENT (3): ID no positivo o estado fuera de los tres permitidos.
+  //   - NOT_FOUND (5): Si no existe ningún vehículo con el ID especificado.
+  //   - INTERNAL (13): Error interno del servidor o fallo de actualización.
   rpc ActualizarEstado (ActualizarEstadoRequest)
       returns (VehiculoResponse);
 
-  // Busca vehículos disponibles según filtros opcionales y excluyendo IDs.
+  // BuscarVehiculosDisponibles
+  // Finalidad:
+  //   Busca y filtra vehículos disponibles para alquiler aplicando criterios de
+  //   tipo, marca, modelo y rango de precio, excluyendo vehículos ya reservados
+  //   en el intervalo solicitado.
+  // Parámetros:
+  //   BuscarVehiculosDisponiblesRequest (tipoVehiculo, marca, modelo, precioMin,
+  //   precioMax, idsExcluidos).
+  // Devuelve:
+  //   ListaVehiculosResponse con los vehículos que cumplen todos los criterios.
+  // Reglas de negocio:
+  //   - En base de datos se consultan únicamente vehículos con activo = true y
+  //     estado = 'DISPONIBLE'.
+  //   - idsExcluidos: lista de IDs numéricos provistos habitualmente por Rental Service
+  //     (vehículos ocupados en las fechas requeridas). Admite hasta un máximo de
+  //     1000 elementos; cada ID debe ser una cadena numérica positiva de 64 bits.
+  //   - Límite de seguridad en base de datos: la consulta aplica LIMIT 1000.
+  //   - Filtros en memoria:
+  //     * tipoVehiculo: opcional; si se envía, debe coincidir con uno de los tipos válidos.
+  //     * marca / modelo: búsqueda case-insensitive por subcadena parcial.
+  //     * precioMin / precioMax: cadenas decimales monetarias. Si ambos están presentes,
+  //       precioMin no puede ser estrictamente mayor a precioMax.
+  // Códigos gRPC:
+  //   - OK (0): Búsqueda ejecutada exitosamente (puede retornar lista vacía).
+  //   - INVALID_ARGUMENT (3): Si idsExcluidos supera los 1000 elementos, si algún ID
+  //     no es válido, si tipoVehiculo no es reconocido, si el formato decimal de
+  //     precioMin o precioMax es incorrecto, o si precioMin > precioMax.
+  //   - INTERNAL (13): Error interno del servidor o falla en la consulta de datos.
   rpc BuscarVehiculosDisponibles (BuscarVehiculosDisponiblesRequest)
       returns (ListaVehiculosResponse);
+
+  // CrearSolicitudExterna
+  // Finalidad:
+  //   Registra una solicitud de incorporación de un vehículo externo propuesto
+  //   por un cliente para formar parte de la plataforma.
+  // Parámetros:
+  //   CrearSolicitudExternaRequest (clienteId, documento, patente, marca, modelo,
+  //   anio, color, tipoVehiculo, precioDiario).
+  // Devuelve:
+  //   SolicitudExternaResponse con la solicitud creada en estado "PENDIENTE".
+  // Reglas de negocio:
+  //   - clienteId: entero positivo mayor a 0.
+  //   - documento: obligatorio, alfanumérico, máx 20 caracteres.
+  //   - Valida datos de vehículo idénticos a CrearVehiculo (patente única máx 10,
+  //     marca/modelo máx 50, anio > 0, tipoVehiculo válido, precioDiario decimal > 0).
+  // Códigos gRPC:
+  //   - OK (0): Solicitud registrada con éxito.
+  //   - INVALID_ARGUMENT (3): ID de cliente inválido, documento incorrecto o fallo
+  //     en validaciones del vehículo.
+  //   - ALREADY_EXISTS (6): Si ya existe una solicitud registrada para esa misma patente.
+  //   - INTERNAL (13): Error interno del servidor al crear la solicitud externa.
+    rpc CrearSolicitudExterna (CrearSolicitudExternaRequest)
+    returns (SolicitudExternaResponse);
+
+  // ConsultarSolicitudExterna
+  // Finalidad:
+  //   Consulta el progreso y los resultados de validación de una solicitud externa.
+  // Parámetros:
+  //   ConsultarSolicitudExternaRequest (vehiculoExternoId, clienteId).
+  // Devuelve:
+  //   SolicitudExternaResponse con los datos y estados de la solicitud.
+  // Reglas de negocio:
+  //   - Control de titularidad: verifica que solicitud.clienteId coincida con el
+  //     clienteId recibido para no divulgar solicitudes entre distintos usuarios.
+  //   - Si la solicitud no existe o pertenece a otro cliente, devuelve NOT_FOUND.
+  // Códigos gRPC:
+  //   - OK (0): Solicitud encontrada y retornada.
+  //   - INVALID_ARGUMENT (3): Si vehiculoExternoId o clienteId no son enteros positivos.
+  //   - NOT_FOUND (5): Solicitud no encontrada o no pertenece al cliente solicitante.
+  //   - INTERNAL (13): Error interno del servidor al consultar la solicitud.
+    rpc ConsultarSolicitudExterna (ConsultarSolicitudExternaRequest)
+    returns (SolicitudExternaResponse);
+
+  // ConsultarSolicitudesExternasPorCliente
+  // Finalidad:
+  //   Lista todas las solicitudes de incorporación de vehículos registradas por
+  //   un cliente determinado.
+  // Parámetros:
+  //   SolicitudesExternasClienteRequest (campo "clienteId").
+  // Devuelve:
+  //   ListaSolicitudesExternasResponse con las solicitudes del cliente.
+  // Reglas de negocio:
+  //   - clienteId: debe ser un entero positivo mayor a 0.
+  // Códigos gRPC:
+  //   - OK (0): Consulta completada con éxito (la lista puede ser vacía).
+  //   - INVALID_ARGUMENT (3): Si clienteId no es un entero positivo válido.
+  //   - INTERNAL (13): Error interno del servidor al listar solicitudes externas.
+    rpc ConsultarSolicitudesExternasPorCliente (SolicitudesExternasClienteRequest)
+    returns (ListaSolicitudesExternasResponse);
 }
 
+// ----------------------------------------------------------------------------
+// Mensajes de Petición y Respuesta
+// ----------------------------------------------------------------------------
+
+// Petición para listar vehículos con filtro opcional de actividad.
 message ConsultarVehiculosRequest {
+  // Filtro de actividad.
+  // Opcional. Si es true, retorna solo vehículos activos (activo = true).
+  // Valor por defecto proto3: false, que significa "sin filtro" (retorna todos los
+  // vehículos registrados, incluidos los dados de baja lógica).
+  // Ejemplo: true.
   bool soloActivos = 1;
 }
 
+// Petición con identificador único de vehículo.
 message VehiculoIdRequest {
+  // Identificador único numérico del vehículo en base de datos.
+  // Obligatorio. Debe ser un entero positivo de 64 bits (> 0 y <= Long.MAX_VALUE).
+  // Valor por defecto proto3: 0 (considerado inválido por la lógica del servicio).
+  // Ejemplo: 42.
   int64 id = 1;
 }
 
+// Petición para registrar un nuevo vehículo en la flota.
 message CrearVehiculoRequest {
+  // Patente / matrícula identificatoria única del vehículo.
+  // Obligatorio. Formato: alfanumérico, máx 10 caracteres, sin espacios ni guiones.
+  // Se normaliza a mayúsculas y es inmutable una vez dada de alta.
+  // Ejemplo: "AA123BB".
   string patente = 1;
+
+  // Marca del fabricante del vehículo.
+  // Obligatorio. Longitud: 1 a 50 caracteres.
+  // Ejemplo: "Toyota".
   string marca = 2;
+
+  // Denominación comercial o modelo del vehículo.
+  // Obligatorio. Longitud: 1 a 50 caracteres.
+  // Ejemplo: "Corolla".
   string modelo = 3;
+
+  // Año de fabricación o modelo del vehículo.
+  // Obligatorio. Debe ser un entero positivo mayor a 0.
+  // Ejemplo: 2024.
   int32 anio = 4;
+
+  // Color predominante de la carrocería.
+  // Opcional. Longitud máx: 30 caracteres. Valor por defecto proto3: "" (sin especificar).
+  // Ejemplo: "Gris Plata".
   string color = 5;
 
-  // SEDAN, SUV, PICKUP, COUPE o HATCHBACK.
+  // Categoría o tipo de carrocería del vehículo.
+  // Obligatorio. Valores estrictamente permitidos: SEDAN, SUV, PICKUP, COUPE o HATCHBACK.
+  // Ejemplo: "SEDAN".
   string tipoVehiculo = 6;
 
-  // Importe decimal, por ejemplo "25000.00".
+  // Tarifa diaria de alquiler expresada como string decimal.
+  // Obligatorio. Formato: hasta 8 enteros y hasta 2 decimales con punto (".")
+  // mayor estrictamente a 0, por ejemplo "25000.00".
+  // Ejemplo: "25000.00".
   string precioDiario = 7;
 }
 
+// Petición para modificar los datos de un vehículo existente.
+// Nota: La patente es INMUTABLE y no forma parte de este mensaje.
 message ModificarVehiculoRequest {
+  // Identificador único del vehículo a modificar.
+  // Obligatorio. Entero positivo de 64 bits mayor a 0.
+  // Ejemplo: 42.
   int64 id = 1;
+
+  // Marca actualizada del fabricante.
+  // Obligatorio. Longitud: 1 a 50 caracteres.
+  // Ejemplo: "Toyota".
   string marca = 2;
+
+  // Modelo actualizado del vehículo.
+  // Obligatorio. Longitud: 1 a 50 caracteres.
+  // Ejemplo: "Corolla XEI".
   string modelo = 3;
+
+  // Año de fabricación actualizado.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 2024.
   int32 anio = 4;
+
+  // Color actualizado.
+  // Opcional. Longitud máx: 30 caracteres.
+  // Ejemplo: "Azul Metalizado".
   string color = 5;
+
+  // Tipo o categoría de vehículo actualizado (SEDAN, SUV, PICKUP, COUPE, HATCHBACK).
+  // Obligatorio. Valores permitidos: SEDAN, SUV, PICKUP, COUPE o HATCHBACK.
+  // Ejemplo: "SEDAN".
   string tipoVehiculo = 6;
+
+  // Tarifa diaria de alquiler actualizada como string decimal.
+  // Obligatorio. Formato decimal con hasta 8 enteros y 2 decimales, mayor a 0.
+  // Ejemplo: "28000.00".
   string precioDiario = 7;
 }
 
+// Petición para actualizar el estado operativo de un vehículo.
 message ActualizarEstadoRequest {
+  // Identificador único del vehículo cuyo estado se desea actualizar.
+  // Obligatorio. Entero positivo de 64 bits mayor a 0.
+  // Ejemplo: 42.
   int64 id = 1;
 
-  // DISPONIBLE, RESERVADO o EN_ALQUILER.
+  // Nuevo estado operativo del vehículo.
+  // Obligatorio. Valores estrictamente permitidos: DISPONIBLE, RESERVADO o EN_ALQUILER.
+  // Ejemplo: "RESERVADO".
   string estado = 2;
 }
 
+// Petición para buscar vehículos activos y disponibles para alquiler con filtros.
 message BuscarVehiculosDisponiblesRequest {
+  // Filtro exacto por categoría de carrocería (SEDAN, SUV, PICKUP, COUPE, HATCHBACK).
+  // Opcional. Si no se envía o es "", no se filtra por tipo de vehículo.
+  // Ejemplo: "SUV".
   optional string tipoVehiculo = 1;
+
+  // Filtro por marca mediante búsqueda de coincidencia parcial (case-insensitive).
+  // Opcional. Si no se envía o es "", no se filtra por marca.
+  // Ejemplo: "Toy".
   optional string marca = 2;
+
+  // Filtro por modelo mediante búsqueda de coincidencia parcial (case-insensitive).
+  // Opcional. Si no se envía o es "", no se filtra por modelo.
+  // Ejemplo: "Corolla".
   optional string modelo = 3;
+
+  // Cota inferior para la tarifa diaria de alquiler como string decimal.
+  // Opcional. Formato decimal (hasta 8 enteros y 2 decimales).
+  // Si no se envía o es "", no se aplica límite inferior de precio.
+  // Ejemplo: "15000.00".
   optional string precioMin = 4;
+
+  // Cota superior para la tarifa diaria de alquiler como string decimal.
+  // Opcional. Formato decimal (hasta 8 enteros y 2 decimales).
+  // Si no se envía o es "", no se aplica límite superior de precio.
+  // Ejemplo: "40000.00".
   optional string precioMax = 5;
+
+  // Lista de identificadores de vehículos ocupados o no disponibles a excluir del resultado.
+  // Opcional. Colección de IDs numéricos positivos provistos comúnmente por Rental Service.
+  // Restricción: admite hasta un máximo estricto de 1000 elementos.
+  // Si la lista es vacía, no se excluye ningún vehículo por ID.
+  // Ejemplo: [3, 7, 12].
   repeated int64 idsExcluidos = 6;
 }
 
+// Representación completa de un vehículo en el catálogo de la plataforma.
 message VehiculoResponse {
+  // Identificador único numérico del vehículo asignado por MySQL (clave primaria).
+  // Ejemplo: 42.
   int64 id = 1;
+
+  // Patente registral única e inmutable del vehículo.
+  // Ejemplo: "AA123BB".
   string patente = 2;
+
+  // Marca del fabricante.
+  // Ejemplo: "Toyota".
   string marca = 3;
+
+  // Modelo del vehículo.
+  // Ejemplo: "Corolla".
   string modelo = 4;
+
+  // Año de fabricación.
+  // Ejemplo: 2024.
   int32 anio = 5;
+
+  // Color de la carrocería.
+  // Ejemplo: "Blanco".
   string color = 6;
+
+  // Categoría de carrocería. Valores: SEDAN, SUV, PICKUP, COUPE o HATCHBACK.
+  // Ejemplo: "SEDAN".
   string tipoVehiculo = 7;
+
+  // Tarifa diaria de alquiler formateada con 2 decimales.
+  // Ejemplo: "25000.00".
   string precioDiario = 8;
+
+  // Estado operativo actual del vehículo.
+  // Valores posibles: DISPONIBLE, RESERVADO o EN_ALQUILER.
+  // Ejemplo: "DISPONIBLE".
   string estado = 9;
+
+  // Estado de actividad del vehículo en el sistema.
+  // true = vehículo habilitado; false = dado de baja lógica.
+  // Ejemplo: true.
   bool activo = 10;
 }
 
+// Colección de vehículos devuelta por consultas de catálogo y búsquedas de disponibilidad.
 message ListaVehiculosResponse {
+  // Lista de vehículos que cumplen con el criterio de búsqueda. Puede ser vacía.
   repeated VehiculoResponse vehiculos = 1;
+}
+
+// Petición para iniciar la solicitud de incorporación de un vehículo externo.
+message CrearSolicitudExternaRequest {
+  // Identificador único del cliente solicitante (titular propuesto).
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 10.
+  int64 clienteId = 1;
+
+  // Documento de identidad del cliente titular.
+  // Obligatorio. Alfanumérico, máx 20 caracteres.
+  // Ejemplo: "38999111".
+  string documento = 2;
+
+  // Patente del vehículo externo propuesto.
+  // Obligatorio. Alfanumérico máx 10 caracteres, única entre solicitudes activas.
+  // Ejemplo: "AB987CD".
+  string patente = 3;
+
+  // Marca del vehículo propuesto.
+  // Obligatorio. Máx 50 caracteres.
+  // Ejemplo: "Ford".
+  string marca = 4;
+
+  // Modelo del vehículo propuesto.
+  // Obligatorio. Máx 50 caracteres.
+  // Ejemplo: "Focus".
+  string modelo = 5;
+
+  // Año de fabricación del vehículo.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 2022.
+  int32 anio = 6;
+
+  // Color de la carrocería.
+  // Opcional. Máx 30 caracteres.
+  // Ejemplo: "Negro".
+  string color = 7;
+
+  // Categoría de carrocería (SEDAN, SUV, PICKUP, COUPE o HATCHBACK).
+  // Obligatorio.
+  // Ejemplo: "HATCHBACK".
+  string tipoVehiculo = 8;
+
+  // Tarifa diaria pretendida como string decimal (hasta 8 enteros y 2 decimales).
+  // Obligatorio.
+  // Ejemplo: "22000.00".
+  string precioDiario = 9;
+}
+
+// Petición para consultar una solicitud externa validando pertenencia.
+message ConsultarSolicitudExternaRequest {
+  // Identificador único de la solicitud de vehículo externo.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 3.
+  int64 vehiculoExternoId = 1;
+
+  // Permite verificar que la solicitud pertenece al cliente.
+  // Identificador del cliente para verificación estricta de titularidad.
+  // Obligatorio. El servicio verifica que la solicitud pertenezca a este clienteId;
+  // si difiere, retorna NOT_FOUND para no filtrar información a terceros.
+  // Ejemplo: 10.
+  int64 clienteId = 2;
+}
+
+// Petición para listar las solicitudes externas de un cliente.
+message SolicitudesExternasClienteRequest {
+  // Identificador del cliente cuyas solicitudes se consultan.
+  // Obligatorio. Entero positivo mayor a 0.
+  // Ejemplo: 10.
+  int64 clienteId = 1;
+}
+
+// Respuesta que detalla el estado y avance de una solicitud de incorporación externa.
+message SolicitudExternaResponse {
+  // Identificador único de la solicitud externa en base de datos.
+  // Ejemplo: 3.
+  int64 vehiculoExternoId = 1;
+
+  // Identificador del cliente solicitante.
+  // Ejemplo: 10.
+  int64 clienteId = 2;
+
+  // Patente del vehículo registrado en la solicitud.
+  // Ejemplo: "AB987CD".
+  string patente = 3;
+
+  // Marca del vehículo.
+  // Ejemplo: "Ford".
+  string marca = 4;
+
+  // Modelo del vehículo.
+  // Ejemplo: "Focus".
+  string modelo = 5;
+
+  // Año de fabricación.
+  // Ejemplo: 2022.
+  int32 anio = 6;
+
+  // Color de la carrocería.
+  // Ejemplo: "Negro".
+  string color = 7;
+
+  // Categoría de carrocería.
+  // Ejemplo: "HATCHBACK".
+  string tipoVehiculo = 8;
+
+  // Tarifa diaria propuesta.
+  // Ejemplo: "22000.00".
+  string precioDiario = 9;
+
+  // PENDIENTE, APROBADA, RECHAZADA o INCORPORADA.
+  // Estado general de la solicitud externa.
+  // Valores posibles en el flujo de validación: PENDIENTE, APROBADA, RECHAZADA o INCORPORADA.
+  // Ejemplo: "PENDIENTE".
+  string estado = 10;
+
+  // Ausente mientras no se haya recibido la validación.
+  // Resultado de la verificación policial de la patente vía eventos.
+  // Opcional: Ausente o vacío mientras no se reciba la respuesta de la entidad verificadora.
+  // Ejemplo: "APROBADA".
+  optional string resultadoPatente = 11;
+
+  // Resultado de la verificación registral de titularidad del cliente sobre el vehículo.
+  // Opcional: Ausente o vacío mientras esté en trámite.
+  // Ejemplo: "APROBADA".
+  optional string resultadoTitularidad = 12;
+
+  // Presente después del alta definitiva.
+  // Identificador del vehículo creado en la flota oficial tras la incorporación definitiva.
+  // Opcional: Solo presente cuando el estado es "INCORPORADA".
+  // Ejemplo: 85.
+  optional int64 vehiculoId = 13;
+}
+
+// Colección de solicitudes externas devuelta al consultar por cliente.
+message ListaSolicitudesExternasResponse {
+  // Lista de solicitudes externas asociadas al cliente. Puede ser vacía.
+  repeated SolicitudExternaResponse solicitudes = 1;
 }
