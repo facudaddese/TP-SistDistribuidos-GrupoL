@@ -61,4 +61,20 @@ public class ClienteService {
                 .build();
         grpcClientManager.getCustomerStub().darDeBajaCliente(grpcRequest);
     }
+
+    public com.unla.grupol.rentar.rentar_dssd.dto.ClienteResponse buscarPorDocumento(String documento) {
+        try {
+            customer.Customer.ClienteResponse grpcResponse = grpcClientManager.getCustomerStub().consultarClientePorDocumento(
+                    customer.Customer.ConsultarClientePorDocumentoRequest.newBuilder()
+                            .setDocumento(documento != null ? documento.trim() : "")
+                            .build()
+            );
+            return clienteGrpcMapper.toResponseDTO(grpcResponse);
+        } catch (io.grpc.StatusRuntimeException e) {
+            if (e.getStatus().getCode() == io.grpc.Status.Code.NOT_FOUND) {
+                return null;
+            }
+            throw e;
+        }
+    }
 }

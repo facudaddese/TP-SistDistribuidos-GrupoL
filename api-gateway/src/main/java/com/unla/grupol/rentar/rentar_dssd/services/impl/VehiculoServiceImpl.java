@@ -57,10 +57,43 @@ public class VehiculoServiceImpl implements VehiculoService {
 
     @Override
     public List<VehiculoResponseDTO> getAllVehiculos() {
+        return getAllVehiculos(false);
+    }
+
+    @Override
+    public List<VehiculoResponseDTO> getAllVehiculos(boolean soloActivos) {
         ConsultarVehiculosRequest grpcRequest = ConsultarVehiculosRequest.newBuilder()
-                .setSoloActivos(false)
+                .setSoloActivos(soloActivos)
                 .build();
         ListaVehiculosResponse grpcResponse = grpcClientManager.getVehicleStub().consultarVehiculos(grpcRequest);
+        return vehiculoGrpcMapper.toResponseDTOList(grpcResponse);
+    }
+
+    @Override
+    public List<VehiculoResponseDTO> buscarDisponibles(String tipoVehiculo, String marca, String modelo, String precioMin, String precioMax, List<Long> idsExcluidos) {
+        com.unla.grupol.rentar.grpc.vehicle.BuscarVehiculosDisponiblesRequest.Builder builder =
+                com.unla.grupol.rentar.grpc.vehicle.BuscarVehiculosDisponiblesRequest.newBuilder();
+
+        if (tipoVehiculo != null && !tipoVehiculo.isBlank()) {
+            builder.setTipoVehiculo(tipoVehiculo.trim());
+        }
+        if (marca != null && !marca.isBlank()) {
+            builder.setMarca(marca.trim());
+        }
+        if (modelo != null && !modelo.isBlank()) {
+            builder.setModelo(modelo.trim());
+        }
+        if (precioMin != null && !precioMin.isBlank()) {
+            builder.setPrecioMin(precioMin.trim());
+        }
+        if (precioMax != null && !precioMax.isBlank()) {
+            builder.setPrecioMax(precioMax.trim());
+        }
+        if (idsExcluidos != null && !idsExcluidos.isEmpty()) {
+            builder.addAllIdsExcluidos(idsExcluidos);
+        }
+
+        ListaVehiculosResponse grpcResponse = grpcClientManager.getVehicleStub().buscarVehiculosDisponibles(builder.build());
         return vehiculoGrpcMapper.toResponseDTOList(grpcResponse);
     }
 }
